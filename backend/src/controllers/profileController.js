@@ -94,19 +94,21 @@ export const saveOrUpdateProfile = async (req, res, next) => {
     if (existingEmis !== undefined && Array.isArray(existingEmis)) updateFields.existingEmis = existingEmis;
 
     if (mongoose.connection.readyState === 1) {
+      const setOnInsertFields = {
+        userId: req.user._id
+      };
+      if (updateFields.monthlyIncome === undefined) setOnInsertFields.monthlyIncome = 0;
+      if (updateFields.monthlyExpenses === undefined) setOnInsertFields.monthlyExpenses = 0;
+      if (updateFields.otherExpenses === undefined) setOnInsertFields.otherExpenses = 0;
+      if (updateFields.monthlySavingsTarget === undefined) setOnInsertFields.monthlySavingsTarget = 0;
+      if (updateFields.currentSavings === undefined) setOnInsertFields.currentSavings = 0;
+      if (updateFields.existingEmis === undefined) setOnInsertFields.existingEmis = [];
+
       const profile = await FinancialProfile.findOneAndUpdate(
         { userId: req.user._id },
         {
           $set: updateFields,
-          $setOnInsert: {
-            userId: req.user._id,
-            monthlyIncome: updateFields.monthlyIncome ?? 0,
-            monthlyExpenses: updateFields.monthlyExpenses ?? 0,
-            otherExpenses: updateFields.otherExpenses ?? 0,
-            monthlySavingsTarget: updateFields.monthlySavingsTarget ?? 0,
-            currentSavings: updateFields.currentSavings ?? 0,
-            existingEmis: updateFields.existingEmis ?? []
-          }
+          $setOnInsert: setOnInsertFields
         },
         { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
       );

@@ -20,7 +20,11 @@ export const LoanProvider = ({ children }) => {
   // Financial Profile state
   const [profile, setProfile] = useState(() => {
     try {
-      const saved = localStorage.getItem('creditlens_profile');
+      const userStr = localStorage.getItem('creditlens_user');
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const userId = userObj?._id || userObj?.id;
+      const key = userId ? `creditlens_profile_${userId}` : 'creditlens_profile';
+      const saved = localStorage.getItem(key);
       if (saved) {
         const parsed = JSON.parse(saved);
         return {
@@ -28,7 +32,8 @@ export const LoanProvider = ({ children }) => {
           ...parsed,
           otherExpenses: parsed.otherExpenses ?? 0,
           monthlySavingsTarget: parsed.monthlySavingsTarget ?? 0,
-          currentSavings: parsed.currentSavings ?? 0
+          currentSavings: parsed.currentSavings ?? 0,
+          existingEmis: Array.isArray(parsed.existingEmis) ? parsed.existingEmis : []
         };
       }
       return DEFAULT_PROFILE;
@@ -36,6 +41,8 @@ export const LoanProvider = ({ children }) => {
       return DEFAULT_PROFILE;
     }
   });
+
+  const [profileLoading, setProfileLoading] = useState(false);
 
   // Active Loan Parameters (used across Calculator, Schedule, Affordability, Prepayment)
   const [loanParams, setLoanParams] = useState(() => {
@@ -71,10 +78,13 @@ export const LoanProvider = ({ children }) => {
     }, 3500);
   };
 
-  // Sync profile to localStorage
+  // Sync profile to user-scoped localStorage
   useEffect(() => {
-    localStorage.setItem('creditlens_profile', JSON.stringify(profile));
-  }, [profile]);
+    const userId = user?._id || user?.id;
+    if (userId) {
+      localStorage.setItem(`creditlens_profile_${userId}`, JSON.stringify(profile));
+    }
+  }, [profile, user]);
 
   // Sync active loan to localStorage
   useEffect(() => {
@@ -89,21 +99,53 @@ export const LoanProvider = ({ children }) => {
   // React to user authentication state
   useEffect(() => {
     const token = localStorage.getItem('creditlens_token');
+    const userId = user?._id || user?.id;
 
     if (user && token) {
-      // Authenticated real user: fetch real data from MongoDB
+      // First, restore cached profile for this specific user if available
+      if (userId) {
+        try {
+          const cached = localStorage.getItem(`creditlens_profile_${userId}`);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            setProfile((prev) => ({
+              ...prev,
+              ...parsed,
+              otherExpenses: parsed.otherExpenses ?? 0,
+              monthlySavingsTarget: parsed.monthlySavingsTarget ?? 0,
+              currentSavings: parsed.currentSavings ?? 0,
+              existingEmis: Array.isArray(parsed.existingEmis) ? parsed.existingEmis : []
+            }));
+          }
+        } catch {
+          // ignore cache error
+        }
+      }
+
+      setProfileLoading(true);
+      // Authenticated real user: fetch real data from MongoDB Atlas
       profileAPI.getProfile()
         .then((res) => {
           if (res && res.profile) {
-            setProfile((prev) => ({
-              ...prev,
-              ...res.profile,
-              otherExpenses: res.profile.otherExpenses ?? 0
-            }));
+            const fetched = {
+              monthlyIncome: res.profile.monthlyIncome ?? 0,
+              monthlyExpenses: res.profile.monthlyExpenses ?? 0,
+              otherExpenses: res.profile.otherExpenses ?? 0,
+              monthlySavingsTarget: res.profile.monthlySavingsTarget ?? 0,
+              currentSavings: res.profile.currentSavings ?? 0,
+              existingEmis: Array.isArray(res.profile.existingEmis) ? res.profile.existingEmis : []
+            };
+            setProfile(fetched);
+            if (userId) {
+              localStorage.setItem(`creditlens_profile_${userId}`, JSON.stringify(fetched));
+            }
           }
         })
         .catch((err) => {
           console.warn('[CreditLens] Could not load profile from MongoDB:', err.message);
+        })
+        .finally(() => {
+          setProfileLoading(false);
         });
 
       scenarioAPI.getScenarios()
@@ -118,6 +160,7 @@ export const LoanProvider = ({ children }) => {
     } else {
       setProfile(DEFAULT_PROFILE);
       setSavedScenarios([]);
+      setProfileLoading(false);
     }
   }, [user]);
 
@@ -126,10 +169,29 @@ export const LoanProvider = ({ children }) => {
     const merged = { ...profile, ...newProfile };
     setProfile(merged);
 
+    const userId = user?._id || user?.id;
+    if (userId) {
+      localStorage.setItem(`creditlens_profile_${userId}`, JSON.stringify(merged));
+    }
+
     const token = localStorage.getItem('creditlens_token');
     if (token) {
       profileAPI.saveProfile(merged)
-        .then(() => {
+        .then((res) => {
+          if (res && res.profile) {
+            const synced = {
+              monthlyIncome: res.profile.monthlyIncome ?? 0,
+              monthlyExpenses: res.profile.monthlyExpenses ?? 0,
+              otherExpenses: res.profile.otherExpenses ?? 0,
+              monthlySavingsTarget: res.profile.monthlySavingsTarget ?? 0,
+              currentSavings: res.profile.currentSavings ?? 0,
+              existingEmis: Array.isArray(res.profile.existingEmis) ? res.profile.existingEmis : []
+            };
+            setProfile(synced);
+            if (userId) {
+              localStorage.setItem(`creditlens_profile_${userId}`, JSON.stringify(synced));
+            }
+          }
           showToast('Financial profile saved to MongoDB successfully!');
         })
         .catch((err) => {
@@ -142,6 +204,10 @@ export const LoanProvider = ({ children }) => {
 
   const resetProfileToDefault = () => {
     setProfile(DEFAULT_PROFILE);
+    const userId = user?._id || user?.id;
+    if (userId) {
+      localStorage.setItem(`creditlens_profile_${userId}`, JSON.stringify(DEFAULT_PROFILE));
+    }
     const token = localStorage.getItem('creditlens_token');
     if (token) {
       profileAPI.deleteProfile().catch(() => {});
@@ -155,8 +221,8 @@ export const LoanProvider = ({ children }) => {
       id: `emi_${Date.now()}`,
       name: loanItem.name.trim() || 'Personal Loan',
       amount: Math.max(0, Number(loanItem.amount) || 0),
-      balance: Math.max(0, Number(loanItem.balance) || 0),
-      annualRate: Math.max(0, Number(loanItem.annualRate) || 10.0),
+      balance: loanItem.balance !== undefined && loanItem.balance !== '' ? Math.max(0, Number(loanItem.balance)) : 0,
+      annualRate: loanItem.annualRate !== undefined && loanItem.annualRate !== '' ? Math.max(0, Math.min(100, Number(loanItem.annualRate))) : 10.0,
       remainingMonths: Math.max(1, Math.round(Number(loanItem.remainingMonths) || 12))
     };
     setProfile((prev) => {
@@ -164,6 +230,10 @@ export const LoanProvider = ({ children }) => {
         ...prev,
         existingEmis: [...prev.existingEmis, newItem]
       };
+      const userId = user?._id || user?.id;
+      if (userId) {
+        localStorage.setItem(`creditlens_profile_${userId}`, JSON.stringify(updated));
+      }
       const token = localStorage.getItem('creditlens_token');
       if (token) {
         profileAPI.saveProfile(updated).catch(() => {});
@@ -181,6 +251,10 @@ export const LoanProvider = ({ children }) => {
           item.id === id ? { ...item, ...updatedFields } : item
         )
       };
+      const userId = user?._id || user?.id;
+      if (userId) {
+        localStorage.setItem(`creditlens_profile_${userId}`, JSON.stringify(updated));
+      }
       const token = localStorage.getItem('creditlens_token');
       if (token) {
         profileAPI.saveProfile(updated).catch(() => {});
@@ -196,6 +270,10 @@ export const LoanProvider = ({ children }) => {
         ...prev,
         existingEmis: prev.existingEmis.filter((item) => item.id !== id)
       };
+      const userId = user?._id || user?.id;
+      if (userId) {
+        localStorage.setItem(`creditlens_profile_${userId}`, JSON.stringify(updated));
+      }
       const token = localStorage.getItem('creditlens_token');
       if (token) {
         profileAPI.saveProfile(updated).catch(() => {});
@@ -356,6 +434,7 @@ export const LoanProvider = ({ children }) => {
     <LoanContext.Provider
       value={{
         profile,
+        profileLoading,
         updateProfile,
         resetProfileToDefault,
         addExistingLoan,

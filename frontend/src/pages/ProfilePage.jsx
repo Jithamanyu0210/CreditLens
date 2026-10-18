@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
   Wallet, 
@@ -23,14 +23,39 @@ import { BackButton } from '../components/common/BackButton';
 
 export const ProfilePage = () => {
   const { user, logout } = useAuth();
-  const { profile, updateProfile, resetProfileToDefault, addExistingLoan, updateExistingLoan, deleteExistingLoan } = useLoan();
+  const { 
+    profile, 
+    profileLoading,
+    updateProfile, 
+    resetProfileToDefault, 
+    addExistingLoan, 
+    updateExistingLoan, 
+    deleteExistingLoan 
+  } = useLoan();
 
   // Baseline form state
-  const [income, setIncome] = useState(profile.monthlyIncome);
-  const [expenses, setExpenses] = useState(profile.monthlyExpenses);
+  const [income, setIncome] = useState(profile.monthlyIncome ?? 0);
+  const [expenses, setExpenses] = useState(profile.monthlyExpenses ?? 0);
   const [otherExpenses, setOtherExpenses] = useState(profile.otherExpenses ?? 0);
-  const [savingsTarget, setSavingsTarget] = useState(profile.monthlySavingsTarget || 15000);
-  const [currentSavings, setCurrentSavings] = useState(profile.currentSavings || 180000);
+  const [savingsTarget, setSavingsTarget] = useState(profile.monthlySavingsTarget ?? 0);
+  const [currentSavings, setCurrentSavings] = useState(profile.currentSavings ?? 0);
+
+  // Synchronize form state whenever user's profile is loaded or updated
+  useEffect(() => {
+    if (profile) {
+      setIncome(profile.monthlyIncome ?? 0);
+      setExpenses(profile.monthlyExpenses ?? 0);
+      setOtherExpenses(profile.otherExpenses ?? 0);
+      setSavingsTarget(profile.monthlySavingsTarget ?? 0);
+      setCurrentSavings(profile.currentSavings ?? 0);
+    }
+  }, [
+    profile.monthlyIncome,
+    profile.monthlyExpenses,
+    profile.otherExpenses,
+    profile.monthlySavingsTarget,
+    profile.currentSavings
+  ]);
 
   // New EMI inline state
   const [newLoanName, setNewLoanName] = useState('');
@@ -57,17 +82,35 @@ export const ProfilePage = () => {
       return;
     }
     const emiNum = parseFloat(newLoanEmi);
-    if (isNaN(emiNum) || emiNum <= 0) {
-      setError('Please enter a valid monthly EMI amount.');
+    if (isNaN(emiNum) || emiNum < 0) {
+      setError('Please enter a valid monthly EMI amount (cannot be negative).');
+      return;
+    }
+
+    const balanceNum = newLoanBalance === '' ? emiNum * 12 : parseFloat(newLoanBalance);
+    if (isNaN(balanceNum) || balanceNum < 0) {
+      setError('Outstanding balance cannot be negative.');
+      return;
+    }
+
+    const rateNum = newLoanRate === '' ? 10 : parseFloat(newLoanRate);
+    if (isNaN(rateNum) || rateNum < 0 || rateNum > 100) {
+      setError('Interest rate must be between 0% and 100%.');
+      return;
+    }
+
+    const monthsNum = newLoanMonths === '' ? 12 : parseInt(newLoanMonths, 10);
+    if (isNaN(monthsNum) || monthsNum < 1) {
+      setError('Remaining tenure must be at least 1 month.');
       return;
     }
 
     addExistingLoan({
       name: newLoanName.trim(),
       amount: emiNum,
-      balance: parseFloat(newLoanBalance) || emiNum * 12,
-      annualRate: parseFloat(newLoanRate) || 10,
-      remainingMonths: parseInt(newLoanMonths, 10) || 12
+      balance: balanceNum,
+      annualRate: rateNum,
+      remainingMonths: monthsNum
     });
 
     setNewLoanName('');
@@ -82,32 +125,54 @@ export const ProfilePage = () => {
     setEditingLoanId(loan.id);
     setEditName(loan.name);
     setEditAmount(loan.amount);
-    setEditBalance(loan.balance || 0);
-    setEditRate(loan.annualRate || 10);
-    setEditMonths(loan.remainingMonths || 12);
+    setEditBalance(loan.balance ?? 0);
+    setEditRate(loan.annualRate ?? 10);
+    setEditMonths(loan.remainingMonths ?? 12);
   };
 
   const handleSaveEdit = (id) => {
+    const amtNum = parseFloat(editAmount);
+    if (isNaN(amtNum) || amtNum < 0) {
+      setError('EMI amount cannot be negative.');
+      return;
+    }
+    const balNum = editBalance === '' ? 0 : parseFloat(editBalance);
+    if (isNaN(balNum) || balNum < 0) {
+      setError('Loan balance cannot be negative.');
+      return;
+    }
+    const rateNum = editRate === '' ? 10 : parseFloat(editRate);
+    if (isNaN(rateNum) || rateNum < 0 || rateNum > 100) {
+      setError('Interest rate must be between 0% and 100%.');
+      return;
+    }
+    const monthsNum = editMonths === '' ? 12 : parseInt(editMonths, 10);
+    if (isNaN(monthsNum) || monthsNum < 1) {
+      setError('Remaining tenure must be at least 1 month.');
+      return;
+    }
+
     updateExistingLoan(id, {
       name: editName.trim() || 'Existing Loan',
-      amount: Math.max(0, Number(editAmount) || 0),
-      balance: Math.max(0, Number(editBalance) || 0),
-      annualRate: Math.max(0, Number(editRate) || 0),
-      remainingMonths: Math.max(1, Math.round(Number(editMonths) || 1))
+      amount: amtNum,
+      balance: balNum,
+      annualRate: rateNum,
+      remainingMonths: monthsNum
     });
     setEditingLoanId(null);
+    setError('');
   };
 
   const handleSaveProfile = (e) => {
     e.preventDefault();
-    const incomeNum = parseFloat(income);
-    const expensesNum = parseFloat(expenses);
-    const otherExpensesNum = parseFloat(otherExpenses) || 0;
-    const savingsTargetNum = parseFloat(savingsTarget);
-    const currentSavingsNum = parseFloat(currentSavings);
+    const incomeNum = income === '' ? 0 : parseFloat(income);
+    const expensesNum = expenses === '' ? 0 : parseFloat(expenses);
+    const otherExpensesNum = otherExpenses === '' ? 0 : parseFloat(otherExpenses);
+    const savingsTargetNum = savingsTarget === '' ? 0 : parseFloat(savingsTarget);
+    const currentSavingsNum = currentSavings === '' ? 0 : parseFloat(currentSavings);
 
-    if (isNaN(incomeNum) || incomeNum <= 0) {
-      setError('Monthly income must be greater than ₹0.');
+    if (isNaN(incomeNum) || incomeNum < 0) {
+      setError('Monthly income cannot be negative.');
       return;
     }
 
@@ -116,8 +181,18 @@ export const ProfilePage = () => {
       return;
     }
 
-    if (otherExpensesNum < 0) {
+    if (isNaN(otherExpensesNum) || otherExpensesNum < 0) {
       setError('Other monthly expenses cannot be negative.');
+      return;
+    }
+
+    if (isNaN(savingsTargetNum) || savingsTargetNum < 0) {
+      setError('Monthly savings target cannot be negative.');
+      return;
+    }
+
+    if (isNaN(currentSavingsNum) || currentSavingsNum < 0) {
+      setError('Current liquid savings cannot be negative.');
       return;
     }
 
@@ -133,11 +208,12 @@ export const ProfilePage = () => {
 
   const handleReset = () => {
     resetProfileToDefault();
-    setIncome(85000);
-    setExpenses(32000);
-    setOtherExpenses(6000);
-    setSavingsTarget(15000);
-    setCurrentSavings(180000);
+    setIncome(0);
+    setExpenses(0);
+    setOtherExpenses(0);
+    setSavingsTarget(0);
+    setCurrentSavings(0);
+    setError('');
   };
 
   // Calculations for summary sidebar
@@ -247,7 +323,7 @@ export const ProfilePage = () => {
             </button>
           </div>
 
-          <form onSubmit={handleSaveProfile}>
+          <form onSubmit={handleSaveProfile} noValidate>
             {/* Monthly Income */}
             <div className="form-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -263,10 +339,13 @@ export const ProfilePage = () => {
                 <input
                   id="profile-income"
                   type="number"
-                  min="1"
-                  step="500"
+                  min="0"
+                  step="any"
                   value={income}
-                  onChange={(e) => setIncome(e.target.value)}
+                  onChange={(e) => {
+                    setIncome(e.target.value);
+                    if (error) setError('');
+                  }}
                   className="form-input has-prefix-pill has-suffix-pill input-emerald"
                   required
                 />
@@ -290,9 +369,12 @@ export const ProfilePage = () => {
                   id="profile-expenses"
                   type="number"
                   min="0"
-                  step="500"
+                  step="any"
                   value={expenses}
-                  onChange={(e) => setExpenses(e.target.value)}
+                  onChange={(e) => {
+                    setExpenses(e.target.value);
+                    if (error) setError('');
+                  }}
                   className="form-input has-prefix-pill has-suffix-pill input-amber"
                   required
                 />
@@ -316,9 +398,12 @@ export const ProfilePage = () => {
                   id="profile-other-expenses"
                   type="number"
                   min="0"
-                  step="500"
+                  step="any"
                   value={otherExpenses}
-                  onChange={(e) => setOtherExpenses(e.target.value)}
+                  onChange={(e) => {
+                    setOtherExpenses(e.target.value);
+                    if (error) setError('');
+                  }}
                   className="form-input has-prefix-pill has-suffix-pill input-rose"
                   placeholder="0"
                 />
@@ -345,9 +430,12 @@ export const ProfilePage = () => {
                   id="profile-savings-target"
                   type="number"
                   min="0"
-                  step="500"
+                  step="any"
                   value={savingsTarget}
-                  onChange={(e) => setSavingsTarget(e.target.value)}
+                  onChange={(e) => {
+                    setSavingsTarget(e.target.value);
+                    if (error) setError('');
+                  }}
                   className="form-input has-prefix-pill has-suffix-pill input-sky"
                 />
                 <span className="input-suffix-pill">/ month</span>
@@ -373,18 +461,21 @@ export const ProfilePage = () => {
                   id="profile-liquid-savings"
                   type="number"
                   min="0"
-                  step="5000"
+                  step="any"
                   value={currentSavings}
-                  onChange={(e) => setCurrentSavings(e.target.value)}
+                  onChange={(e) => {
+                    setCurrentSavings(e.target.value);
+                    if (error) setError('');
+                  }}
                   className="form-input has-prefix-pill has-suffix-pill input-teal"
                 />
                 <span className="input-suffix-pill">Reserves</span>
               </div>
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '13px', marginTop: '10px' }}>
+            <button type="submit" disabled={profileLoading} className="btn btn-primary" style={{ width: '100%', padding: '13px', marginTop: '10px' }}>
               <Save size={16} />
-              <span>Update Baseline Finances</span>
+              <span>{profileLoading ? 'Loading Profile...' : 'Update Baseline Finances'}</span>
             </button>
           </form>
 
@@ -444,6 +535,8 @@ export const ProfilePage = () => {
                           />
                           <input
                             type="number"
+                            min="0"
+                            step="any"
                             value={editAmount}
                             onChange={(e) => setEditAmount(e.target.value)}
                             className="form-input"
@@ -454,6 +547,8 @@ export const ProfilePage = () => {
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <input
                             type="number"
+                            min="0"
+                            step="any"
                             value={editBalance}
                             onChange={(e) => setEditBalance(e.target.value)}
                             className="form-input"
@@ -462,6 +557,9 @@ export const ProfilePage = () => {
                           />
                           <input
                             type="number"
+                            min="0"
+                            max="100"
+                            step="any"
                             value={editRate}
                             onChange={(e) => setEditRate(e.target.value)}
                             className="form-input"
@@ -470,6 +568,8 @@ export const ProfilePage = () => {
                           />
                           <input
                             type="number"
+                            min="1"
+                            step="1"
                             value={editMonths}
                             onChange={(e) => setEditMonths(e.target.value)}
                             className="form-input"
@@ -500,7 +600,7 @@ export const ProfilePage = () => {
                             {loan.name}
                           </div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                            Balance: <strong>{formatINR(loan.balance || 0)}</strong> &bull; Rate: <strong>{loan.annualRate || 10}%</strong> &bull; Left: <strong>{loan.remainingMonths || 12} mos</strong>
+                            Balance: <strong>{formatINR(loan.balance || 0)}</strong> &bull; Rate: <strong>{loan.annualRate ?? 10}%</strong> &bull; Left: <strong>{loan.remainingMonths || 12} mos</strong>
                           </div>
                         </div>
 
@@ -535,7 +635,7 @@ export const ProfilePage = () => {
             )}
 
             {/* Add New Loan Form */}
-            <form onSubmit={handleAddLoan} style={{
+            <form onSubmit={handleAddLoan} noValidate style={{
               backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius-md)',
@@ -555,6 +655,8 @@ export const ProfilePage = () => {
                 />
                 <input
                   type="number"
+                  min="0"
+                  step="any"
                   placeholder="Monthly EMI (₹)"
                   value={newLoanEmi}
                   onChange={(e) => setNewLoanEmi(e.target.value)}
@@ -565,6 +667,8 @@ export const ProfilePage = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '10px' }}>
                 <input
                   type="number"
+                  min="0"
+                  step="any"
                   placeholder="Outstanding ₹"
                   value={newLoanBalance}
                   onChange={(e) => setNewLoanBalance(e.target.value)}
@@ -572,7 +676,9 @@ export const ProfilePage = () => {
                 />
                 <input
                   type="number"
-                  step="0.1"
+                  min="0"
+                  max="100"
+                  step="any"
                   placeholder="Rate % (p.a.)"
                   value={newLoanRate}
                   onChange={(e) => setNewLoanRate(e.target.value)}
@@ -580,6 +686,8 @@ export const ProfilePage = () => {
                 />
                 <input
                   type="number"
+                  min="1"
+                  step="1"
                   placeholder="Months Left"
                   value={newLoanMonths}
                   onChange={(e) => setNewLoanMonths(e.target.value)}
