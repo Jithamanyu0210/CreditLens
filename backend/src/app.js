@@ -58,6 +58,11 @@ app.use(express.json());
 
 // Ensure MongoDB connection in serverless runtime environments (e.g. Vercel)
 app.use(async (req, res, next) => {
+  // Pure status endpoints respond immediately without waiting for database
+  if (req.path === '/' || req.path === '/api/health' || req.path === '/health') {
+    return next();
+  }
+
   if (process.env.VERCEL && process.env.MONGODB_URI && mongoose.connection.readyState !== 1) {
     try {
       await connectDB();
@@ -82,6 +87,13 @@ app.get(['/api/health', '/health'], (req, res) => {
   res.json({
     status: 'healthy',
     service: 'CreditLens REST API Gateway',
+    database: {
+      status: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+      hasUriConfigured: Boolean(process.env.MONGODB_URI && process.env.MONGODB_URI.trim() !== '')
+    },
+    ai: {
+      available: Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '' && process.env.GEMINI_API_KEY !== 'your_gemini_api_key_here')
+    },
     timestamp: new Date().toISOString()
   });
 });

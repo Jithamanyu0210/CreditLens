@@ -483,7 +483,7 @@ GEMINI_MODEL=gemini-3.8-flash
 
 | Variable Name | Required | Example Production Value | Description |
 | :--- | :--- | :--- | :--- |
-| `VITE_API_URL` | **Required in Prod** | `https://YOUR_BACKEND_VERCEL_URL/api` | Full base URL of the deployed backend API gateway |
+| `VITE_API_URL` | **Required in Prod** | `https://credit-lens-fvm8.vercel.app/api` | Full base URL of the deployed backend API gateway |
 
 *During local development, `VITE_API_URL` is optional because Vite's proxy automatically routes `/api` calls to `http://localhost:5000`.*
 
@@ -570,8 +570,8 @@ CreditLens is architected to deploy on [Vercel](https://vercel.com/) as **two se
 
 ```text
 GitHub: Jithamanyu0210/CreditLens
-  ├── Project 1: Frontend SPA (Root Directory: frontend)  ->  https://YOUR_FRONTEND_VERCEL_URL
-  └── Project 2: Backend REST (Root Directory: backend)   ->  https://YOUR_BACKEND_VERCEL_URL
+  ├── Project 1: Frontend SPA (Root Directory: frontend)  ->  https://credit-lens-orcin.vercel.app
+  └── Project 2: Backend REST (Root Directory: backend)   ->  https://credit-lens-fvm8.vercel.app
 ```
 
 ### Pre-Deployment Requirement: MongoDB Atlas Network Access
@@ -589,7 +589,7 @@ Because Vercel Serverless Functions execute on dynamic IP ranges hosted on AWS, 
 1. Log in to your [Vercel Dashboard](https://vercel.com/dashboard) and click **Add New...** $\rightarrow$ **Project**.
 2. Select your repository: **`Jithamanyu0210/CreditLens`**.
 3. In the project configuration:
-   - **Project Name**: e.g., `creditlens-backend`
+   - **Project Name**: e.g., `credit-lens-backend`
    - **Framework Preset**: Select **Other**.
    - **Root Directory**: Click *Edit* and select **`backend`**.
 4. Expand **Environment Variables** and add:
@@ -597,35 +597,38 @@ Because Vercel Serverless Functions execute on dynamic IP ranges hosted on AWS, 
    - `MONGODB_DB_NAME` = `creditlens`
    - `JWT_SECRET` = `<a-strong-random-secret-key>`
    - `GEMINI_API_KEY` = `<your-google-gemini-api-key>` (optional)
-   - `CLIENT_ORIGIN` = `https://YOUR_FRONTEND_VERCEL_URL` *(set temporarily to `*` or update after frontend is deployed)*
+   - `CLIENT_ORIGIN` = `https://credit-lens-orcin.vercel.app`
 5. Click **Deploy**.
-6. When deployment finishes, copy your assigned backend domain (e.g., `https://YOUR_BACKEND_VERCEL_URL`).
-7. Verify by opening `https://YOUR_BACKEND_VERCEL_URL/api/health` in your browser. It should return `{"status":"healthy"}`.
+6. When deployment finishes, your assigned backend domain is **`https://credit-lens-fvm8.vercel.app`**.
+7. Verify by opening `https://credit-lens-fvm8.vercel.app/api/health` in your browser. It returns `{"status":"healthy"}`.
 
 #### Part 2: Deploy the Frontend Project
 1. In your Vercel Dashboard, click **Add New...** $\rightarrow$ **Project**.
 2. Select the same repository: **`Jithamanyu0210/CreditLens`**.
 3. In the project configuration:
-   - **Project Name**: e.g., `creditlens-frontend`
+   - **Project Name**: e.g., `credit-lens-frontend`
    - **Framework Preset**: Select **Vite**.
    - **Root Directory**: Click *Edit* and select **`frontend`**.
    - **Build Command**: `npm run build`
    - **Output Directory**: `dist`
 4. Expand **Environment Variables** and add:
-   - `VITE_API_URL` = `https://YOUR_BACKEND_VERCEL_URL/api` *(replace with your real backend URL + `/api`)*
+   - `VITE_API_URL` = `https://credit-lens-fvm8.vercel.app/api`
 5. Click **Deploy**.
-6. Copy your assigned frontend domain (e.g., `https://YOUR_FRONTEND_VERCEL_URL`).
+6. Your assigned frontend domain is **`https://credit-lens-orcin.vercel.app`**.
 
 #### Part 3: Synchronize CORS on the Backend
 1. Open your **Backend Project** on Vercel $\rightarrow$ **Settings** $\rightarrow$ **Environment Variables**.
-2. Update `CLIENT_ORIGIN` to your exact frontend production URL:
+2. Set `CLIENT_ORIGIN` to your exact frontend production URL:
    ```env
-   CLIENT_ORIGIN=https://YOUR_FRONTEND_VERCEL_URL
+   CLIENT_ORIGIN=https://credit-lens-orcin.vercel.app
    ```
 3. Trigger a redeployment of the backend (**Deployments** $\rightarrow$ **Redeploy**) so the CORS filter accepts requests from your production frontend.
 
-> [!IMPORTANT]
-> **Production Placeholders**: Replace `YOUR_FRONTEND_VERCEL_URL` and `YOUR_BACKEND_VERCEL_URL` with your actual `.vercel.app` domains or custom domains. For official Vercel documentation, refer to [Vercel Node.js Serverless Functions](https://vercel.com/docs/functions/serverless-functions/runtimes/node-js) and [Vercel Vite Deployment](https://vercel.com/docs/frameworks/vite).
+> [!TIP]
+> **Active Production Deployments**:
+> - **Live Frontend**: [https://credit-lens-orcin.vercel.app/](https://credit-lens-orcin.vercel.app/)
+> - **Live Backend API**: [https://credit-lens-fvm8.vercel.app/](https://credit-lens-fvm8.vercel.app/)
+> - **Official Guides**: Refer to [Vercel Node.js Serverless Functions](https://vercel.com/docs/functions/serverless-functions/runtimes/node-js) and [Vercel Vite Deployment](https://vercel.com/docs/frameworks/vite).
 
 ---
 

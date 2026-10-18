@@ -40,8 +40,9 @@ export const connectDB = async (customUri = null) => {
     try {
       const conn = await mongoose.connect(uri, {
         dbName: process.env.MONGODB_DB_NAME || 'creditlens',
-        serverSelectionTimeoutMS: 8000,
-        autoIndex: true
+        serverSelectionTimeoutMS: 5000,
+        maxPoolSize: 10,
+        autoIndex: process.env.NODE_ENV !== 'production'
       });
 
       isConnected = true;
