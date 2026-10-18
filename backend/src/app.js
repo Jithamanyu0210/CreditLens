@@ -8,6 +8,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');
 
+import mongoose from 'mongoose';
+import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import profileRoutes from './routes/profileRoutes.js';
 import loanRoutes from './routes/loanRoutes.js';
@@ -19,21 +21,30 @@ import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 
 const app = express();
 
-// CORS configuration restricted to frontend origins
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  process.env.CLIENT_ORIGIN
-].filter(Boolean);
+// Build normalized list of allowed CORS origins
+const getAllowedOrigins = () => {
+  const origins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  if (process.env.CLIENT_ORIGIN) {
+    const configured = process.env.CLIENT_ORIGIN
+      .split(',')
+      .map((item) => item.trim().replace(/\/+$/, ''))
+      .filter(Boolean);
+    origins.push(...configured);
+  }
+  return origins;
+};
 
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (such as mobile apps, curl, or server-to-server)
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin) return callback(null, true);
+      const normalizedOrigin = origin.replace(/\/+$/, '');
+      const allowed = getAllowedOrigins();
+      if (allowed.includes(normalizedOrigin) || allowed.includes('*')) {
         return callback(null, true);
       }
-      return callback(null, true); // Dev convenience
+      return callback(null, true); // Dev convenience fallback
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -45,6 +56,18 @@ app.options('*', cors());
 
 app.use(express.json());
 
+// Ensure MongoDB connection in serverless runtime environments (e.g. Vercel)
+app.use(async (req, res, next) => {
+  if (process.env.VERCEL && process.env.MONGODB_URI && mongoose.connection.readyState !== 1) {
+    try {
+      await connectDB();
+    } catch {
+      // ConnectDB internally logs masked connection diagnostic details
+    }
+  }
+  next();
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
@@ -54,8 +77,8 @@ app.use('/api/scenarios', scenarioRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/bank-rates', bankRateRoutes);
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
+// Health check endpoint (supports both /api/health and /health)
+app.get(['/api/health', '/health'], (req, res) => {
   res.json({
     status: 'healthy',
     service: 'CreditLens REST API Gateway',
