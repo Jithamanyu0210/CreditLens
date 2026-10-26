@@ -11,7 +11,7 @@ export const LoginPage = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { user, login } = useAuth();
+  const { login } = useAuth();
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -53,27 +53,6 @@ export const LoginPage = () => {
           </p>
         </div>
 
-        {/* Existing active session prompt if returning user */}
-        {user && (
-          <div style={{
-            backgroundColor: 'var(--primary-light)',
-            border: '1px solid var(--primary-border)',
-            borderRadius: 'var(--radius-md)',
-            padding: '12px 16px',
-            marginBottom: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px'
-          }}>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Active session: <strong style={{ color: 'var(--text-primary)' }}>{user.name}</strong> ({user.email})
-            </div>
-            <Link to="/dashboard" className="btn btn-primary btn-sm" style={{ padding: '6px 14px', fontSize: '0.825rem', whiteSpace: 'nowrap' }}>
-              Dashboard &rarr;
-            </Link>
-          </div>
-        )}
 
         {/* Tab switch between Sign In and Sign Up */}
         <div className="kova-auth-tabs">
