@@ -19,6 +19,7 @@
 - [B. Problem Statement](#b-problem-statement)
 - [C. Objectives](#c-objectives)
 - [D. Features](#d-features)
+  - [AI Financial Assistant (`/ai-assistant`)](#10-ai-financial-assistant-ai-assistant)
 - [E. Technology Stack](#e-technology-stack)
 - [F. System Architecture](#f-system-architecture)
 - [G. Project Directory Structure](#g-project-directory-structure)
@@ -117,25 +118,49 @@ The features documented below are **fully implemented and verified** in the acti
 ### 7. Verified Bank Interest Rates Comparison (`/bank-rates`)
 - Curated dataset covering **19+ leading Indian banks** (State Bank of India, HDFC Bank, ICICI Bank, Axis Bank, Bank of Baroda, Kotak Mahindra Bank, Punjab National Bank, Canara Bank, Union Bank, etc.).
 - Covers 6 retail categories: **Home**, **Car**, **Personal**, **Education**, **Two-Wheeler**, and **Gold Loans**.
-- Displays minimum rates, maximum rates, benchmark linkages (EBLR/RLLR/MCLR), processing fees, and links to official bank rate disclosures.
-- Filter by bank name, category, and public/private sector with a 1-click **Auto-Fill into Calculator** feature.
+- Displays minimum rates, maximum rates, processing charges, and links to official bank rate disclosures.
+- Instant search by bank name, category, and public/private sector with a 1-click **Auto-Fill into Calculator** feature.
+- Streamlined rate discovery interface focused purely on actionable comparison data.
 
 ### 8. Saved Loan Scenarios (`/saved-scenarios`)
 - Persistent scenario storage in MongoDB Atlas.
 - Full CRUD operations: name scenarios, assign tags (Home, Auto, Education, Refinance), write notes, duplicate with 1 click, and delete.
 
-### 9. User Authentication & Session Security
+### 9. User Authentication & Login-First Session Routing
 - User registration and login utilizing **bcryptjs** (10 salt rounds) and **JSON Web Tokens (JWT)**.
-- Protected client-side routes with automatic invalid-token purge.
+- **Login-First Route Protection**: Unauthenticated users visiting the site or attempting direct access to protected routes are automatically redirected to the Sign In page.
+- **Session Restoration on Refresh**: Active valid sessions are smoothly restored from secure storage on page refresh without forcing users to re-authenticate.
+- **Automatic Token Purge**: Expired or invalid tokens are safely cleared with an immediate redirect to Sign In.
 - Strict multi-tenant user isolation ensuring users cannot access or mutate records belonging to others.
 
-### 10. Google Gemini AI Financial Insights (`/api/ai`)
-- Integrated with `@google/genai` to generate human-readable, contextual explanations for affordability assessments and comparison trade-offs.
-- **Graceful Fallback**: If an API key is missing or quota is exceeded, CreditLens automatically provides deterministic, rule-based advice without errors.
+### 10. AI Financial Assistant (`/ai-assistant`)
+A dedicated, single-page conversational intelligence suite placed separately in the sidebar, powered by backend **Google Gemini AI** and deterministic financial calculations:
+- **Feature A — AI Financial Insights**:
+  - 1-click **Generate Financial Insights** action analyzing the user's actual saved income, expenses, active EMIs, and liquid reserves.
+  - Plain-English executive summary accompanied by 4 key metric cards (Inflow, Outflow, Debt Servicing, Disposable Cashflow).
+  - Categorized breakdown: *Affordability & Cash Flow Concerns*, *Cash Flow Optimization Suggestions*, and *Key Considerations Before Additional Borrowing*.
+  - Clean missing data detection and real-time regeneration.
+- **Feature B — Monthly Budget Insights**:
+  - Detailed income vs. outflow comparison utilizing backend-calculated totals.
+  - Identifies expense commitments requiring attention and evaluates debt-to-income balance.
+  - Realistic budgeting frameworks (e.g. 50/30/20 standard) and actionable savings improvement strategies.
+  - Emergency cushion analysis (target cushion vs. existing savings and monthly burn rate).
+- **Feature C — Ask CreditLens: AI Chat Assistant**:
+  - Interactive conversational interface with a welcome guide, message thread, and loading states.
+  - **5 Instant Starter Questions**:
+    1. *How can I improve my monthly savings?*
+    2. *Can I afford another loan based on my current finances?*
+    3. *How can I reduce my monthly financial burden?*
+    4. *Explain my current financial situation in simple words.*
+    5. *What should I consider before taking a loan?*
+  - Dual-layer safety: Deterministic calculations remain the source of truth, Gemini explains results, and server-only API key handling ensures zero key exposure.
+  - Includes duplicate send prevention, clear quota/error notifications, and financial disclaimer badges.
 
-### 11. High-Contrast Light & Dark Themes
-- Theme switching with CSS custom property tokens (`data-theme="light"` / `data-theme="dark"`).
-- Persisted in browser `localStorage` with automated system preference detection.
+### 11. Distinct Light & Dark Theme Dashboard
+- **Light Theme**: Clean, bright `#f8fafc` canvas, pure `#ffffff` cards with subtle borders (`#e2e8f0`), deep slate typography (`#0f172a`), emerald green positive metrics, and rich indigo accents.
+- **Dark Theme**: Deep navy/obsidian `#080d19` background, `#131d35` cards with luminous borders (`rgba(148, 163, 184, 0.16)`), readable `#f8fafc` and `#cbd5e1` text, cyan/indigo buttons, and high-contrast form inputs.
+- Preserved theme switching with CSS tokens (`data-theme="light"` / `data-theme="dark"`), persisted in `localStorage` with system preference fallback.
+- Stable, responsive layout with zero unwanted horizontal overflow or page shaking.
 
 > [!NOTE]
 > **Implementation Status**: All 11 features above are fully implemented and backed by passing automated tests. Automated daily web scraping of live bank websites and server-side PDF generation are planned for future versions.
@@ -286,7 +311,7 @@ creditlens/
 │   │   ├── config/
 │   │   │   └── db.js                   # Mongoose connection with promise caching & URI masking
 │   │   ├── controllers/
-│   │   │   ├── aiController.js         # Gemini narrative generation and status
+│   │   │   ├── aiController.js         # Gemini insights, budget analysis, chat assistant & status
 │   │   │   ├── authController.js       # Register, login, getMe, logout
 │   │   │   ├── bankRateController.js   # Verified bank rates querying, search, and seed
 │   │   │   ├── loanController.js       # EMI, affordability, amortization, compare
@@ -305,7 +330,7 @@ creditlens/
 │   │   │   ├── LoanScenario.js         # Saved calculation scenario schema
 │   │   │   └── User.js                 # User credentials schema with bcrypt pre-save hook
 │   │   ├── routes/
-│   │   │   ├── aiRoutes.js             # /api/ai endpoints
+│   │   │   ├── aiRoutes.js             # /api/ai endpoints (insights, budget, chat, status)
 │   │   │   ├── authRoutes.js           # /api/auth endpoints
 │   │   │   ├── bankRateRoutes.js       # /api/bank-rates endpoints
 │   │   │   ├── loanRoutes.js           # /api/loans endpoints
@@ -316,7 +341,7 @@ creditlens/
 │   │       ├── affordabilityService.js # DTI, solvency verdicts, and cashflow math
 │   │       ├── amortizationService.js  # Month-by-month zero-balance amortization
 │   │       ├── emiService.js           # Reducing-balance & 0% interest formulas
-│   │       ├── geminiService.js        # Google GenAI integration with rule-based fallback
+│   │       ├── geminiService.js        # Google GenAI integration (gemini-3.5-flash) with fallback
 │   │       └── simulatorService.js     # Inverse EMI, prepayment, and runway services
 │   └── tests/
 │       ├── api.test.js                 # Supertest REST API integration suite
@@ -341,15 +366,19 @@ creditlens/
         │       ├── BackButton.jsx      # Navigation return button
         │       ├── Disclaimer.jsx      # Regulatory financial disclaimer banner
         │       ├── ErrorBoundary.jsx   # Top-level React error recovery boundary
+        │       ├── HelpTooltip.jsx     # Floating contextual help tooltips
         │       ├── Navbar.jsx          # Top navigation with theme toggle and user state
         │       ├── ProtectedRoute.jsx  # Route guards (ProtectedRoute, PublicOnlyRoute)
+        │       ├── Sidebar.jsx         # Collapsible sidebar with AI Financial Assistant link
+        │       ├── TopNavbar.jsx       # Header bar with session and theme controls
         │       └── Toast.jsx           # Global notification toast system
         ├── context/
-        │   ├── AuthContext.jsx         # User state, JWT storage, login/logout
+        │   ├── AuthContext.jsx         # User state, JWT storage, login/logout, session restore
         │   ├── LoanContext.jsx         # Active loan state, profile sync, scenarios sync
         │   └── ThemeContext.jsx        # Dark/Light mode state with localStorage
         ├── pages/
         │   ├── AffordabilityPage.jsx   # Solvency calculations, DTI gauges, AI insights
+        │   ├── AiAssistantPage.jsx     # Dedicated AI suite: Insights, Budget, & Chat
         │   ├── BankRatesPage.jsx       # 19+ bank rate comparison and search
         │   ├── CalculatorPage.jsx      # EMI calculator with sliders and charts
         │   ├── ComparePage.jsx         # Multi-loan comparison matrix
@@ -363,7 +392,7 @@ creditlens/
         │   ├── SavedScenariosPage.jsx  # Saved scenarios archive
         │   └── SchedulePage.jsx        # Amortization schedule, CSV export, print view
         ├── services/
-        │   └── api.js                  # Shared API client with error handling
+        │   └── api.js                  # Shared API client with error handling & AI methods
         └── utils/
             ├── formatters.js           # Currency (₹) and percentage formatting helpers
             ├── loanCalculations.js     # Client-side mirror of financial calculation engine
@@ -465,7 +494,7 @@ All sensitive credentials and database connection strings are isolated on the se
 | `MONGODB_DB_NAME` | Optional | `creditlens` | Database name inside MongoDB |
 | `JWT_SECRET` | **Required** | `your_long_random_jwt_secret_key_here` | Cryptographic secret for signing session JWTs |
 | `GEMINI_API_KEY` | Optional | `your_gemini_api_key_here` | Google Gemini API key for natural language explanations |
-| `GEMINI_MODEL` | Optional | `gemini-3.8-flash` | Gemini model identifier |
+| `GEMINI_MODEL` | Optional | `gemini-3.5-flash` | Gemini model identifier (supports `gemini-3.5-flash`) |
 
 #### Safe Backend Template Example:
 ```env
@@ -476,7 +505,7 @@ MONGODB_URI=mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/creditlen
 MONGODB_DB_NAME=creditlens
 JWT_SECRET=super_secret_creditlens_fintech_key_change_in_production
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-3.8-flash
+GEMINI_MODEL=gemini-3.5-flash
 ```
 
 ### Frontend Environment Variables (`frontend/.env.production`)
@@ -555,10 +584,13 @@ All API requests and responses use the `application/json` content type. Authenti
 | `POST` | `/api/scenarios/:id/duplicate` | Bearer | Duplicates an existing scenario with `(Copy)` label |
 | `DELETE`| `/api/scenarios/:id` | Bearer | Deletes a scenario (enforcing user ownership) |
 
-### 8. Gemini AI Financial Insights (`/api/ai`)
+### 8. Gemini AI Financial Insights & Assistant (`/api/ai`)
 | Method | Endpoint | Auth | Purpose |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/ai/status` | None | Returns Gemini API availability and model metadata |
+| `GET` | `/api/ai/status` | None | Returns Gemini API availability, active model, and supported features |
+| `POST` | `/api/ai/financial-insights` | Bearer | Generates executive financial insights, concerns, and suggestions for user |
+| `POST` | `/api/ai/budget-insights` | Bearer | Generates monthly budget comparison, expense alerts, and emergency cushion |
+| `POST` | `/api/ai/chat` | Bearer | Contextual chat assistant responding to financial questions with profile data |
 | `POST` | `/api/ai/explain-affordability` | Optional | Generates narrative explanation of loan affordability |
 | `POST` | `/api/ai/explain-comparison` | Optional | Generates trade-off analysis comparing multiple loan options |
 
