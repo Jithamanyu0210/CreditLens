@@ -21,6 +21,7 @@ import { useLoan } from '../context/LoanContext';
 import { formatINR } from '../utils/formatters';
 import { Disclaimer } from '../components/common/Disclaimer';
 import { BackButton } from '../components/common/BackButton';
+import { HelpTooltip } from '../components/common/HelpTooltip';
 
 export const SavedScenariosPage = () => {
   const { savedScenarios, deleteScenario, updateScenario, loadScenarioIntoActive, saveScenario } = useLoan();
@@ -89,10 +90,10 @@ export const SavedScenariosPage = () => {
       <BackButton fallbackPath="/dashboard" />
       <div className="page-header" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
         <div>
-          <h1 className="page-title">Loan Scenario History & Archive</h1>
-          <p className="page-subtitle">
-            Review, edit, and reload previously modeled borrowing scenarios. Tag and compare them side by side.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1 className="page-title">Saved Scenarios</h1>
+            <HelpTooltip text="Review, edit, and reload previously modeled borrowing scenarios. Tag and compare them side by side." placement="right" />
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={() => setModalOpen(true)} className="btn btn-primary">
@@ -232,11 +233,6 @@ export const SavedScenariosPage = () => {
                       <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
                         {scen.name}
                       </h3>
-                      {scen.tags && scen.tags.length > 0 && (
-                        <span className="cl-badge cl-badge-blue" style={{ fontSize: '0.7rem' }}>
-                          {scen.tags[0]}
-                        </span>
-                      )}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                       Created: {new Date(scen.createdAt).toLocaleDateString()}

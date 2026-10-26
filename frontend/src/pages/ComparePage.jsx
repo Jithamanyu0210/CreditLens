@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   GitCompare, 
   ArrowRight, 
@@ -15,6 +16,7 @@ import {
   Check,
   FolderOpen,
   AlertTriangle,
+  AlertCircle,
   Award
 } from 'lucide-react';
 import { 
@@ -32,7 +34,8 @@ import { calculateEMI } from '../utils/loanCalculations';
 import { formatINR, formatNumber } from '../utils/formatters';
 import { Disclaimer } from '../components/common/Disclaimer';
 import { BackButton } from '../components/common/BackButton';
-import { aiAPI } from '../services/api';
+import { HelpTooltip } from '../components/common/HelpTooltip';
+import { aiAPI, loanAPI } from '../services/api';
 
 const COLOR_PALETTE = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 
@@ -64,12 +67,17 @@ const DEFAULT_LOAN_OPTIONS = [
 ];
 
 export const ComparePage = () => {
-  const { profile, savedScenarios } = useLoan();
+  const { profile, savedScenarios, updateLoanParams } = useLoan();
+  const navigate = useNavigate();
 
   // Multi-loan state: supports 2 to 5 loans
   const [loans, setLoans] = useState(DEFAULT_LOAN_OPTIONS);
   const [preferredId, setPreferredId] = useState(null);
   const [importModalSlot, setImportModalSlot] = useState(null);
+  const [compMessage, setCompMessage] = useState('');
+  const [compError, setCompError] = useState('');
+  const [isComparing, setIsComparing] = useState(false);
+  const [backendComparison, setBackendComparison] = useState(null);
 
   // Gemini AI Comparison State
   const [aiComparison, setAiComparison] = useState(null);
@@ -96,6 +104,7 @@ export const ComparePage = () => {
       color: COLOR_PALETTE[loans.length % COLOR_PALETTE.length]
     };
     setLoans([...loans, newLoan]);
+    setCompMessage('');
   };
 
   // Remove loan option (minimum 2)
@@ -105,20 +114,98 @@ export const ComparePage = () => {
     if (preferredId === id) {
       setPreferredId(null);
     }
+    setCompMessage('');
   };
 
-  // Update loan field
+  // Update loan field with stability while typing (allow empty string, do not snap to 0)
   const handleUpdateLoan = (id, field, value) => {
     setLoans((prev) =>
       prev.map((l) => {
         if (l.id !== id) return l;
-        let sanitized = value;
-        if (field === 'principal') sanitized = Math.max(0, Number(value) || 0);
-        if (field === 'annualRate') sanitized = Math.max(0, Math.min(100, Number(value) || 0));
-        if (field === 'tenureMonths') sanitized = Math.max(1, Math.min(480, Math.round(Number(value) || 1)));
-        return { ...l, [field]: sanitized };
+        if (field === 'name') return { ...l, name: value };
+        if (value === '') return { ...l, [field]: '' };
+        return { ...l, [field]: value };
       })
     );
+    setCompMessage('');
+    setCompError('');
+  };
+
+  const handleRunComparison = async () => {
+    // Validate each loan option thoroughly
+    for (let i = 0; i < loans.length; i++) {
+      const l = loans[i];
+      const p = Number(l.principal);
+      const r = Number(l.annualRate);
+      const t = Number(l.tenureMonths);
+      const optionName = l.name || `Option ${i + 1}`;
+
+      if (l.principal === '' || isNaN(p) || p <= 0) {
+        setCompError(`Please enter a valid loan principal amount greater than ₹0 for "${optionName}".`);
+        setCompMessage('');
+        return;
+      }
+      if (l.annualRate === '' || isNaN(r) || r < 0) {
+        setCompError(`Please enter a valid annual interest rate (0% or greater) for "${optionName}".`);
+        setCompMessage('');
+        return;
+      }
+      if (l.tenureMonths === '' || isNaN(t) || t <= 0) {
+        setCompError(`Please enter a valid tenure in months (greater than 0) for "${optionName}".`);
+        setCompMessage('');
+        return;
+      }
+    }
+
+    setCompError('');
+    setIsComparing(true);
+
+    try {
+      const payloadLoans = loans.map((l, idx) => ({
+        id: l.id || `loan_${idx + 1}`,
+        name: l.name || `Option ${idx + 1}`,
+        principal: Number(l.principal),
+        annualRate: Number(l.annualRate),
+        tenureMonths: Number(l.tenureMonths)
+      }));
+
+      const res = await loanAPI.compareLoans(payloadLoans, {
+        monthlyIncome,
+        monthlyExpenses: profile.monthlyExpenses,
+        otherExpenses: profile.otherExpenses || 0,
+        existingEmis: profile.existingEmis || []
+      });
+
+      if (res && res.success) {
+        setBackendComparison(res);
+        const lowestName = res.highlights?.lowestEmiName || lowestEmiLoan?.name;
+        const lowestEmi = res.scenarios?.find((s) => s.id === res.highlights?.lowestEmiId)?.emi || minEmi;
+        setCompMessage(
+          `Comparison evaluated successfully across ${res.count || loans.length} options! Lowest monthly EMI: ${lowestName} (${formatINR(lowestEmi)}/mo).`
+        );
+      } else {
+        setCompMessage(
+          `Comparison evaluated successfully across ${loans.length} options! Lowest monthly EMI: ${lowestEmiLoan?.name} (${formatINR(minEmi)}/mo).`
+        );
+      }
+    } catch (err) {
+      console.warn('Backend comparison API fallback to client calculation:', err);
+      setCompMessage(
+        `Comparison evaluated successfully across ${loans.length} options! Lowest monthly EMI: ${lowestEmiLoan?.name} (${formatINR(minEmi)}/mo).`
+      );
+    } finally {
+      setIsComparing(false);
+    }
+  };
+
+  const handleApplyOption = (loan) => {
+    updateLoanParams({
+      principal: Number(loan.principal) || 0,
+      annualRate: Number(loan.annualRate) || 0,
+      tenureMonths: Number(loan.tenureMonths) || 1,
+      tenureUnit: 'months'
+    });
+    navigate('/calculator');
   };
 
   // Import a saved scenario into a loan slot
@@ -163,7 +250,10 @@ export const ComparePage = () => {
 
   // Calculate metrics for all active loan options
   const calculatedLoans = loans.map((l) => {
-    const calc = calculateEMI(l.principal, l.annualRate, l.tenureMonths);
+    const p = Math.max(0, Number(l.principal) || 0);
+    const r = Math.max(0, Number(l.annualRate) || 0);
+    const t = Math.max(1, Number(l.tenureMonths) || 1);
+    const calc = calculateEMI(p, r, t);
     const totalOutflow = totalBaseExpenses + calc.emi;
     const remainingBalance = monthlyIncome - totalOutflow;
     const emiShareOfIncome = (calc.emi / (monthlyIncome || 1)) * 100;
@@ -254,10 +344,10 @@ export const ComparePage = () => {
 
       <div className="page-header" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
         <div>
-          <h1 className="page-title">Side-by-Side Loan Comparison</h1>
-          <p className="page-subtitle">
-            Compare 3 to 5 simultaneous loan scenarios. Evaluate monthly EMI, total interest cost, and affordability against your financial baseline.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1 className="page-title">Compare Loans</h1>
+            <HelpTooltip text="Compare 3 to 5 simultaneous loan scenarios. Evaluate monthly EMI, total interest cost, and affordability against your financial baseline." placement="right" />
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <button onClick={() => applyPreset('tenure')} className="preset-chip preset-chip-indigo active">
@@ -269,14 +359,65 @@ export const ComparePage = () => {
           <button onClick={() => applyPreset('downpayment')} className="preset-chip preset-chip-amber active">
             Down Payments
           </button>
+          <button
+            id="btn-compare-loans"
+            onClick={handleRunComparison}
+            disabled={isComparing}
+            className="btn btn-primary btn-sm"
+            style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <GitCompare size={14} />
+            <span>{isComparing ? 'Comparing...' : 'Compare Loans'}</span>
+          </button>
           {loans.length < 5 && (
-            <button onClick={handleAddOption} className="btn btn-primary btn-sm">
+            <button
+              id="btn-add-option"
+              onClick={handleAddOption}
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
               <Plus size={14} />
               <span>Add Option ({loans.length}/5)</span>
             </button>
           )}
         </div>
       </div>
+
+      {compError && (
+        <div style={{
+          backgroundColor: 'var(--status-risky-bg)',
+          color: 'var(--status-risky-text)',
+          border: '1px solid var(--status-risky-border)',
+          borderRadius: 'var(--radius-md)',
+          padding: '10px 14px',
+          fontSize: '0.85rem',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <AlertCircle size={16} />
+          <span>{compError}</span>
+        </div>
+      )}
+
+      {compMessage && (
+        <div style={{
+          backgroundColor: 'var(--status-comfortable-bg)',
+          color: 'var(--status-comfortable-text)',
+          border: '1px solid var(--status-comfortable-border)',
+          borderRadius: 'var(--radius-md)',
+          padding: '10px 14px',
+          fontSize: '0.85rem',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <CheckCircle2 size={16} />
+          <span>{compMessage}</span>
+        </div>
+      )}
 
       {/* Comparative Highlights Banner */}
       <div className="cl-card-colored cl-card-indigo" style={{
@@ -300,16 +441,10 @@ export const ComparePage = () => {
             </div>
             <div>
               <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
-                Comparison Highlights & Best-Fit Analysis
+                Comparison Highlights
               </h3>
-              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Multi-loan trade-off evaluation based on baseline income ({formatINR(monthlyIncome)}/mo)
-              </p>
             </div>
           </div>
-          <span className="cl-badge cl-badge-blue" style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
-            Comparing {loans.length} Active Loan Options
-          </span>
         </div>
 
         <div className="grid-3" style={{ gap: '16px' }}>
@@ -473,25 +608,6 @@ export const ComparePage = () => {
                 </div>
               </div>
 
-              {/* Special Badges */}
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                {isPreferred && (
-                  <span className="cl-badge cl-badge-amber" style={{ fontSize: '0.7rem' }}>
-                    ★ Preferred
-                  </span>
-                )}
-                {isLowestEmi && (
-                  <span className="cl-badge cl-badge-emerald" style={{ fontSize: '0.7rem' }}>
-                    Lowest EMI
-                  </span>
-                )}
-                {isLowestInterest && (
-                  <span className="cl-badge cl-badge-blue" style={{ fontSize: '0.7rem' }}>
-                    Lowest Interest
-                  </span>
-                )}
-              </div>
-
               {/* Inputs */}
               <div className="form-group" style={{ marginBottom: '12px' }}>
                 <label className="form-label" style={{ fontSize: '0.775rem' }}>
@@ -588,6 +704,12 @@ export const ComparePage = () => {
                     {formatINR(loan.totalPayment)}
                   </span>
                 </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Loan Tenure:</span>
+                  <span style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+                    {loan.tenureMonths} Months ({Math.round((loan.tenureMonths / 12) * 10) / 10} Yrs)
+                  </span>
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: '0.775rem', color: 'var(--text-secondary)' }}>Remaining Balance:</span>
                   <span style={{ fontSize: '0.9rem', fontWeight: '700', color: loan.remainingBalance >= 0 ? '#10b981' : '#ef4444' }}>
@@ -607,10 +729,152 @@ export const ComparePage = () => {
                     {loan.affordability}
                   </span>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyOption(loan)}
+                  className="btn btn-secondary btn-sm"
+                  style={{ width: '100%', marginTop: '10px', fontSize: '0.75rem', padding: '6px 10px' }}
+                >
+                  <span>Apply to Calculator</span>
+                  <ArrowRight size={13} />
+                </button>
               </div>
             </div>
           );
         })}
+      </div>
+
+      {/* Comparison Action Bar */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '14px', marginBottom: '28px', flexWrap: 'wrap' }}>
+        <button
+          id="btn-compare-loans-bottom"
+          onClick={handleRunComparison}
+          disabled={isComparing}
+          className="btn btn-primary"
+          style={{ padding: '10px 24px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: 'var(--shadow-sm)' }}
+        >
+          <GitCompare size={16} />
+          <span>{isComparing ? 'Comparing Loans...' : 'Compare Loans'}</span>
+        </button>
+        {loans.length < 5 && (
+          <button
+            id="btn-add-loan-bottom"
+            onClick={handleAddOption}
+            className="btn btn-secondary"
+            style={{ padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Plus size={16} />
+            <span>Add Loan Option ({loans.length}/5)</span>
+          </button>
+        )}
+      </div>
+
+      {/* Side-by-Side Comparison Table Matrix */}
+      <div className="cl-card" style={{ marginBottom: '28px', overflowX: 'auto' }}>
+        <div className="cl-card-header">
+          <div className="cl-card-title">
+            <GitCompare size={18} color="var(--primary)" />
+            <span>Side-by-Side Loan Comparison Matrix</span>
+          </div>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid var(--border-subtle)', background: 'var(--bg-card-subtle)' }}>
+              <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: '700' }}>Metric</th>
+              {calculatedLoans.map((loan) => (
+                <th key={loan.id} style={{ padding: '12px 16px', color: loan.color, fontWeight: '800' }}>
+                  {loan.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <td style={{ padding: '12px 16px', fontWeight: '600', color: 'var(--text-secondary)' }}>Loan Principal</td>
+              {calculatedLoans.map((loan) => (
+                <td key={loan.id} style={{ padding: '12px 16px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                  {formatINR(loan.principal)}
+                </td>
+              ))}
+            </tr>
+            <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <td style={{ padding: '12px 16px', fontWeight: '600', color: 'var(--text-secondary)' }}>Interest Rate</td>
+              {calculatedLoans.map((loan) => (
+                <td key={loan.id} style={{ padding: '12px 16px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                  {loan.annualRate}% p.a.
+                </td>
+              ))}
+            </tr>
+            <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <td style={{ padding: '12px 16px', fontWeight: '600', color: 'var(--text-secondary)' }}>Loan Tenure</td>
+              {calculatedLoans.map((loan) => (
+                <td key={loan.id} style={{ padding: '12px 16px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                  {loan.tenureMonths} Months ({Math.round((loan.tenureMonths / 12) * 10) / 10} Yrs)
+                </td>
+              ))}
+            </tr>
+            <tr style={{ borderBottom: '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-card-subtle)' }}>
+              <td style={{ padding: '12px 16px', fontWeight: '700', color: 'var(--primary)' }}>Monthly EMI</td>
+              {calculatedLoans.map((loan) => (
+                <td key={loan.id} style={{ padding: '12px 16px', fontWeight: '800', color: loan.color, fontSize: '0.95rem' }}>
+                  {formatINR(loan.emi)}
+                  {loan.emi === minEmi && (
+                    <span style={{ marginLeft: '6px', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', background: 'var(--accent-emerald-light)', color: 'var(--accent-emerald-text)' }}>
+                      Lowest
+                    </span>
+                  )}
+                </td>
+              ))}
+            </tr>
+            <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <td style={{ padding: '12px 16px', fontWeight: '600', color: 'var(--text-secondary)' }}>Total Interest Payable</td>
+              {calculatedLoans.map((loan) => (
+                <td key={loan.id} style={{ padding: '12px 16px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                  {formatINR(loan.totalInterest)}
+                  {loan.totalInterest === minInterest && (
+                    <span style={{ marginLeft: '6px', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', background: 'var(--accent-sky-light)', color: 'var(--accent-sky-text)' }}>
+                      Lowest
+                    </span>
+                  )}
+                </td>
+              ))}
+            </tr>
+            <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <td style={{ padding: '12px 16px', fontWeight: '600', color: 'var(--text-secondary)' }}>Total Repayment Amount</td>
+              {calculatedLoans.map((loan) => (
+                <td key={loan.id} style={{ padding: '12px 16px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                  {formatINR(loan.totalPayment)}
+                </td>
+              ))}
+            </tr>
+            <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <td style={{ padding: '12px 16px', fontWeight: '600', color: 'var(--text-secondary)' }}>Remaining Monthly Balance</td>
+              {calculatedLoans.map((loan) => (
+                <td key={loan.id} style={{ padding: '12px 16px', fontWeight: '700', color: loan.remainingBalance >= 0 ? '#10b981' : '#ef4444' }}>
+                  {formatINR(loan.remainingBalance)}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td style={{ padding: '12px 16px', fontWeight: '600', color: 'var(--text-secondary)' }}>Budget Assessment</td>
+              {calculatedLoans.map((loan) => (
+                <td key={loan.id} style={{ padding: '12px 16px' }}>
+                  <span style={{
+                    padding: '3px 10px',
+                    borderRadius: '12px',
+                    fontSize: '0.75rem',
+                    fontWeight: '700',
+                    backgroundColor: loan.affordabilityBg,
+                    color: loan.affordabilityColor
+                  }}>
+                    {loan.affordability}
+                  </span>
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {/* Visual Chart Comparison Across All Selected Loans */}
@@ -631,9 +895,6 @@ export const ComparePage = () => {
             </div>
             <span>Comparative Cost Breakdown Across Loans</span>
           </div>
-          <span className="cl-badge cl-badge-purple">
-            Comparing EMI, Interest & Total Repayment
-          </span>
         </div>
 
         <div style={{ height: '340px', width: '100%' }}>
@@ -676,10 +937,6 @@ export const ComparePage = () => {
             <span>AI Scenario Comparison Analysis</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="cl-badge cl-badge-purple" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              <Sparkles size={12} />
-              <span>{aiComparison?.source === 'gemini-ai' ? 'Gemini 3.8 Flash' : 'AI-Powered'}</span>
-            </span>
             <button
               onClick={handleGenerateAiComparison}
               disabled={aiCompLoading}
@@ -797,12 +1054,9 @@ export const ComparePage = () => {
           zIndex: 1000
         }}>
           <div className="cl-card" style={{ width: '100%', maxWidth: '520px', padding: '24px' }}>
-            <h3 style={{ fontSize: '1.15rem', fontWeight: '800', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: '800', marginBottom: '16px' }}>
               Import Saved Scenario into Option
             </h3>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-              Select a saved scenario from your archive to populate this comparison option.
-            </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
               {savedScenarios.map((scen) => (

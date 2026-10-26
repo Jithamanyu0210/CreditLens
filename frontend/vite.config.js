@@ -11,6 +11,14 @@ export default defineConfig({
         target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            if (err.code === 'ECONNREFUSED') {
+              console.warn('\n[CreditLens Proxy] Cannot connect to backend at http://127.0.0.1:5000 (ECONNREFUSED).');
+              console.warn('[Resolution] Ensure backend is running in another terminal: `cd backend && npm start`\n');
+            }
+          });
+        }
       }
     }
   }

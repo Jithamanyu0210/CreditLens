@@ -55,8 +55,8 @@ export const AuthProvider = ({ children }) => {
         }
       })
       .catch((err) => {
-        // If unauthorized (401), token has expired: clear session
-        if (err.statusCode === 401) {
+        // If unauthorized (401/403) or client error, token has expired or is invalid: clear session
+        if (err.statusCode === 401 || err.statusCode === 403 || err.statusCode === 400 || !err.isNetworkError) {
           setUser(null);
           localStorage.removeItem('creditlens_token');
           localStorage.removeItem('creditlens_user');
@@ -109,6 +109,32 @@ export const AuthProvider = ({ children }) => {
     throw new Error('Registration failed: Invalid response from server.');
   };
 
+  const updateUserProfile = async (name, email) => {
+    if (!name || !name.trim()) {
+      throw new Error('Please enter your full name.');
+    }
+    if (!email || !email.trim()) {
+      throw new Error('Please enter your email address.');
+    }
+
+    const res = await authAPI.updateProfile(name.trim(), email.trim());
+    if (res && res.user) {
+      if (res.token) {
+        localStorage.setItem('creditlens_token', res.token);
+      }
+      const updatedUser = {
+        ...user,
+        ...res.user,
+        role: user?.role || res.user.role || 'Borrower / Planner',
+        avatar: res.user.name ? res.user.name.charAt(0).toUpperCase() : 'U'
+      };
+      localStorage.setItem('creditlens_user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      return updatedUser;
+    }
+    throw new Error('Failed to update account profile.');
+  };
+
   const logout = async () => {
     try {
       await authAPI.logout();
@@ -131,6 +157,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         register,
+        updateUserProfile,
         logout
       }}
     >

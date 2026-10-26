@@ -49,7 +49,7 @@ export const LoginPage = () => {
           </div>
           <h1 className="kova-auth-title">Welcome Back</h1>
           <p className="kova-auth-subtitle">
-            Sign in to access your financial profile, saved loan scenarios, and live bank comparisons
+            Sign in to your account
           </p>
         </div>
 
@@ -136,7 +136,7 @@ export const LoginPage = () => {
             {loading ? (
               <span className="kova-btn-loading">
                 <span className="kova-spinner-small" />
-                <span>Authenticating with MongoDB...</span>
+                <span>Signing in...</span>
               </span>
             ) : (
               <>
@@ -158,7 +158,7 @@ export const LoginPage = () => {
         {/* Security badge */}
         <div className="kova-auth-security-badge">
           <ShieldCheck size={15} className="kova-security-icon" />
-          <span>MongoDB Atlas Encrypted &bull; User-Isolated Sessions</span>
+          <span>256-Bit SSL Encrypted &bull; User-Isolated Sessions</span>
         </div>
       </div>
     </div>

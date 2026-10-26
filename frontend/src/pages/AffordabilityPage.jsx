@@ -15,7 +15,8 @@ import {
   Lightbulb,
   Sparkles,
   ArrowRightCircle,
-  Compass
+  Compass,
+  X
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import { useLoan } from '../context/LoanContext';
@@ -23,20 +24,59 @@ import { calculateEMI, calculateAffordability, generateFinancialRecommendations,
 import { formatINR, formatPercent } from '../utils/formatters';
 import { Disclaimer } from '../components/common/Disclaimer';
 import { BackButton } from '../components/common/BackButton';
+import { HelpTooltip } from '../components/common/HelpTooltip';
 import { aiAPI } from '../services/api';
 
 export const AffordabilityPage = () => {
-  const { profile, loanParams, updateLoanParams } = useLoan();
+  const { profile, loanParams, updateLoanParams, saveScenario, showToast } = useLoan();
 
   // Allow what-if adjustments directly on this page
   const [testPrincipal, setTestPrincipal] = useState(loanParams.principal);
   const [testRate, setTestRate] = useState(loanParams.annualRate);
   const [testTenure, setTestTenure] = useState(loanParams.tenureMonths);
+  const [scenarioError, setScenarioError] = useState('');
+  const [isWhatIfOpen, setIsWhatIfOpen] = useState(true);
 
   // Gemini AI Explanation State
   const [aiInsight, setAiInsight] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
+
+  const handleRunScenario = () => {
+    if (!testPrincipal || testPrincipal <= 0) {
+      setScenarioError('Please enter a valid loan principal greater than 0.');
+      return;
+    }
+    if (testRate < 0) {
+      setScenarioError('Interest rate cannot be negative.');
+      return;
+    }
+    if (!testTenure || testTenure <= 0) {
+      setScenarioError('Tenure must be at least 1 month.');
+      return;
+    }
+    setScenarioError('');
+    if (showToast) {
+      showToast('What-If scenario updated!');
+    }
+  };
+
+  const handleSaveCurrentScenario = () => {
+    if (!testPrincipal || testPrincipal <= 0) {
+      setScenarioError('Cannot save an empty scenario.');
+      return;
+    }
+    saveScenario(
+      `Affordability Option - ${formatINR(testPrincipal)}`,
+      {
+        principal: testPrincipal,
+        annualRate: testRate,
+        tenureMonths: testTenure
+      },
+      `Saved from Loan Affordability What-If Simulator with ${affordability.status} verdict.`,
+      ['Affordability', 'What-If']
+    );
+  };
 
   // Compute what-if EMI
   const testEmiResult = calculateEMI(testPrincipal, testRate, testTenure);
@@ -240,17 +280,31 @@ export const AffordabilityPage = () => {
       <BackButton fallbackPath="/dashboard" />
       <div className="page-header" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
         <div>
-          <h1 className="page-title">Loan Affordability Analysis & Financial Insights</h1>
-          <p className="page-subtitle">
-            Evaluating monthly living cashflow, debt payability, and personalized recommendations to improve your affordability status.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1 className="page-title">Loan Affordability</h1>
+            <HelpTooltip text="Evaluating monthly living cashflow, debt payability, and personalized recommendations to improve your affordability status." placement="right" />
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => {
+              setIsWhatIfOpen(true);
+              setTimeout(() => {
+                document.getElementById('what-if-scenarios-section')?.scrollIntoView({ behavior: 'smooth' });
+              }, 50);
+            }}
+            className="btn btn-primary"
+            id="btn-simulate-what-if"
+          >
+            <Sliders size={16} />
+            <span>Simulate What-If Scenarios</span>
+          </button>
           <Link to="/max-loan" className="btn btn-secondary">
-            Max Loan Capacity
+            Loan Capacity
           </Link>
-          <Link to="/profile" className="btn btn-primary">
-            Update Profile
+          <Link to="/profile" className="btn btn-secondary">
+            Profile
           </Link>
         </div>
       </div>
@@ -268,9 +322,6 @@ export const AffordabilityPage = () => {
             <span>AI Loan Affordability Explanation</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="cl-badge" style={{ backgroundColor: 'var(--accent-purple-light)', color: 'var(--accent-purple-text)', border: '1px solid var(--accent-purple-border)' }}>
-              {aiInsight?.source === 'gemini-ai' ? 'Gemini 3.8 Flash' : 'AI-Powered'}
-            </span>
             <button
               onClick={handleGenerateAiExplanation}
               disabled={aiLoading}
@@ -406,9 +457,6 @@ export const AffordabilityPage = () => {
             </div>
             <span>Actionable Financial Insights & Practical Alternatives</span>
           </div>
-          <span className="cl-badge" style={{ backgroundColor: 'var(--accent-sky-light)', color: 'var(--accent-sky-text)', border: '1px solid var(--accent-sky-border)' }}>
-            Personalized Engine
-          </span>
         </div>
 
         {recommendations.length === 0 ? (
@@ -558,83 +606,222 @@ export const AffordabilityPage = () => {
       </div>
 
       {/* Middle Layout: What-if Sliders & Cashflow Stacked Bar */}
-      <div className="grid-2" style={{ alignItems: 'flex-start', marginBottom: '28px' }}>
-        {/* Left: What-if Loan Parameters */}
-        <div className="cl-card cl-card-colored cl-card-indigo">
-          <div className="cl-card-header">
-            <div className="cl-card-title">
-              <div className="kpi-icon-container kpi-icon-indigo" style={{ width: '34px', height: '34px', borderRadius: '8px' }}>
-                <Sliders size={18} />
+      {!isWhatIfOpen ? (
+        <div className="cl-card cl-card-colored cl-card-indigo" style={{ marginBottom: '28px', padding: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div className="kpi-icon-container kpi-icon-indigo" style={{ width: '42px', height: '42px' }}>
+                <Sliders size={20} />
               </div>
-              <span>Simulate What-If Scenarios</span>
+              <div>
+                <div style={{ fontWeight: '800', fontSize: '1.1rem', color: 'var(--text-primary)' }}>Simulate What-If Scenarios</div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Model hypothetical loan amounts, interest rates, and tenures against your monthly cashflow.</div>
+              </div>
             </div>
-            <span className="cl-badge" style={{ backgroundColor: 'var(--accent-indigo-light)', color: 'var(--accent-indigo-text)', border: '1px solid var(--accent-indigo-border)' }}>
-              Real-time
-            </span>
+            <button
+              type="button"
+              onClick={() => setIsWhatIfOpen(true)}
+              className="btn btn-primary"
+              id="btn-reopen-what-if"
+            >
+              <Sliders size={16} />
+              <span>Open What-If Simulator</span>
+            </button>
           </div>
+        </div>
+      ) : (
+        <div id="what-if-scenarios-section" className="grid-2" style={{ alignItems: 'flex-start', marginBottom: '28px' }}>
+          {/* Left: What-if Loan Parameters */}
+          <div className="cl-card cl-card-colored cl-card-indigo">
+            <div className="cl-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="cl-card-title">
+                <div className="kpi-icon-container kpi-icon-indigo" style={{ width: '34px', height: '34px', borderRadius: '8px' }}>
+                  <Sliders size={18} />
+                </div>
+                <span>Simulate What-If Scenarios</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWhatIfOpen(false)}
+                className="btn btn-secondary btn-sm"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                title="Close What-If Scenarios panel"
+                aria-label="Close What-If Scenarios"
+                id="btn-close-what-if"
+              >
+                <X size={15} />
+                <span>Close</span>
+              </button>
+            </div>
 
+          {scenarioError && (
+            <div style={{
+              backgroundColor: 'var(--status-risky-bg)',
+              color: 'var(--status-risky-text)',
+              border: '1px solid var(--status-risky-border)',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.85rem',
+              marginBottom: '14px'
+            }}>
+              {scenarioError}
+            </div>
+          )}
+
+          {/* 1. Proposed Principal */}
           <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <label className="form-label" style={{ margin: 0 }}>Proposed Loan Principal</label>
+              <label className="form-label" style={{ margin: 0 }}>Proposed Loan Principal (₹)</label>
               <span style={{ fontWeight: '800', color: 'var(--accent-indigo)', fontSize: '1.05rem' }}>{formatINR(testPrincipal)}</span>
+            </div>
+            <div className="form-input-wrapper">
+              <span className="input-prefix-pill input-prefix-indigo">₹</span>
+              <input
+                type="number"
+                min="1000"
+                step="25000"
+                value={testPrincipal}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? '' : Math.max(0, Number(e.target.value));
+                  setTestPrincipal(val === '' ? 0 : val);
+                  setScenarioError('');
+                }}
+                className="form-input has-prefix-pill input-indigo"
+                placeholder="Enter loan principal"
+              />
             </div>
             <input
               type="range"
               min="50000"
               max="5000000"
               step="25000"
-              value={testPrincipal}
-              onChange={(e) => setTestPrincipal(Number(e.target.value))}
+              value={Math.min(5000000, Math.max(50000, testPrincipal || 0))}
+              onChange={(e) => {
+                setTestPrincipal(Number(e.target.value));
+                setScenarioError('');
+              }}
               className="range-slider range-slider-indigo"
             />
           </div>
 
-          <div className="form-group" style={{ marginTop: '20px' }}>
+          {/* 2. Interest Rate */}
+          <div className="form-group" style={{ marginTop: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
               <label className="form-label" style={{ margin: 0 }}>Interest Rate (% p.a.)</label>
               <span style={{ fontWeight: '800', color: 'var(--accent-amber)', fontSize: '1.05rem' }}>{testRate}%</span>
+            </div>
+            <div className="form-input-wrapper">
+              <span className="input-prefix-pill input-prefix-amber">%</span>
+              <input
+                type="number"
+                min="0"
+                max="36"
+                step="0.05"
+                value={testRate}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? '' : Math.max(0, Math.min(100, Number(e.target.value)));
+                  setTestRate(val === '' ? 0 : val);
+                  setScenarioError('');
+                }}
+                className="form-input has-prefix-pill input-amber"
+                placeholder="e.g. 8.75"
+              />
             </div>
             <input
               type="range"
               min="0"
               max="24"
               step="0.25"
-              value={testRate}
-              onChange={(e) => setTestRate(Number(e.target.value))}
+              value={Math.min(24, Math.max(0, testRate || 0))}
+              onChange={(e) => {
+                setTestRate(Number(e.target.value));
+                setScenarioError('');
+              }}
               className="range-slider range-slider-amber"
             />
           </div>
 
-          <div className="form-group" style={{ marginTop: '20px' }}>
+          {/* 3. Repayment Tenure */}
+          <div className="form-group" style={{ marginTop: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
               <label className="form-label" style={{ margin: 0 }}>Repayment Tenure (Months)</label>
-              <span style={{ fontWeight: '800', color: 'var(--accent-sky)', fontSize: '1.05rem' }}>{testTenure} mos ({Math.round(testTenure / 12 * 10) / 10} yrs)</span>
+              <span style={{ fontWeight: '800', color: 'var(--accent-sky)', fontSize: '1.05rem' }}>
+                {testTenure} mos ({Math.round((testTenure / 12) * 10) / 10} yrs)
+              </span>
+            </div>
+            <div className="form-input-wrapper">
+              <span className="input-prefix-pill input-prefix-sky">⏱</span>
+              <input
+                type="number"
+                min="1"
+                max="360"
+                step="1"
+                value={testTenure}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? '' : Math.max(1, Math.min(480, Math.round(Number(e.target.value))));
+                  setTestTenure(val === '' ? 1 : val);
+                  setScenarioError('');
+                }}
+                className="form-input has-prefix-pill input-sky"
+                placeholder="Enter tenure in months"
+              />
             </div>
             <input
               type="range"
               min="6"
               max="240"
               step="6"
-              value={testTenure}
-              onChange={(e) => setTestTenure(Number(e.target.value))}
+              value={Math.min(240, Math.max(6, testTenure || 6))}
+              onChange={(e) => {
+                setTestTenure(Number(e.target.value));
+                setScenarioError('');
+              }}
               className="range-slider range-slider-sky"
             />
           </div>
 
-          <button
-            onClick={() => {
-              updateLoanParams({
-                principal: testPrincipal,
-                annualRate: testRate,
-                tenureMonths: testTenure,
-                tenureUnit: 'months'
-              });
-            }}
-            className="btn btn-primary"
-            style={{ width: '100%', marginTop: '14px', padding: '12px' }}
-          >
-            Apply to Global Active Loan
-          </button>
+          {/* Scenario Action Buttons */}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '18px' }}>
+            <button
+              type="button"
+              onClick={handleRunScenario}
+              className="btn btn-secondary btn-sm"
+              style={{ flex: 1 }}
+              id="btn-run-whatif-scenario"
+            >
+              <Sliders size={14} />
+              <span>Run Scenario</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveCurrentScenario}
+              className="btn btn-secondary btn-sm"
+              style={{ flex: 1 }}
+              id="btn-save-whatif-scenario"
+            >
+              <Sparkles size={14} />
+              <span>Save Scenario</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                updateLoanParams({
+                  principal: testPrincipal,
+                  annualRate: testRate,
+                  tenureMonths: testTenure,
+                  tenureUnit: 'months'
+                });
+                if (showToast) {
+                  showToast('Applied scenario to active loan!');
+                }
+              }}
+              className="btn btn-primary btn-sm"
+              style={{ width: '100%', marginTop: '6px' }}
+              id="btn-apply-whatif-loan"
+            >
+              Apply to Global Active Loan
+            </button>
+          </div>
         </div>
 
         {/* Right: Cashflow Stacked Bar Chart */}
@@ -646,9 +833,6 @@ export const AffordabilityPage = () => {
               </div>
               <span>Monthly Income Allocation</span>
             </div>
-            <span className="cl-badge" style={{ backgroundColor: 'var(--accent-emerald-light)', color: 'var(--accent-emerald-text)', border: '1px solid var(--accent-emerald-border)' }}>
-              Income: {formatINR(profile.monthlyIncome)}
-            </span>
           </div>
 
           <div style={{ height: '260px', width: '100%' }}>
@@ -685,8 +869,9 @@ export const AffordabilityPage = () => {
           </div>
         </div>
       </div>
+    )}
 
-      <Disclaimer />
+    <Disclaimer />
     </div>
   );
 };

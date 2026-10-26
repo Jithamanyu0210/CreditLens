@@ -7,6 +7,7 @@ import {
   Calendar, 
   CheckCircle2, 
   AlertTriangle, 
+  AlertCircle,
   ArrowRight,
   Sparkles,
   Info,
@@ -17,6 +18,7 @@ import { useLoan } from '../context/LoanContext';
 import { formatINR } from '../utils/formatters';
 import { Disclaimer } from '../components/common/Disclaimer';
 import { BackButton } from '../components/common/BackButton';
+import { HelpTooltip } from '../components/common/HelpTooltip';
 
 export const EmergencyFundPage = () => {
   const { profile, updateProfile } = useLoan();
@@ -26,6 +28,9 @@ export const EmergencyFundPage = () => {
   const [essentialExpenses, setEssentialExpenses] = useState(defaultEssential);
   const [currentSavings, setCurrentSavings] = useState(profile.currentSavings || 180000);
   const [targetMonthsChoice, setTargetMonthsChoice] = useState(6);
+
+  const [calcError, setCalcError] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
 
   // Calculations independent of loan eligibility
   const validExpenses = Math.max(1000, Number(essentialExpenses) || 1000);
@@ -52,8 +57,20 @@ export const EmergencyFundPage = () => {
     { name: '12-Month Fortress', Amount: target12Months, fill: '#8b5cf6' }
   ];
 
+  const handleCalculateRunway = () => {
+    if (Number(essentialExpenses) <= 0) {
+      setCalcError('Please enter essential monthly living expenses greater than zero.');
+      setStatusMessage('');
+      return;
+    }
+    setCalcError('');
+    setStatusMessage(`Runway calculated: ${monthsCovered} months of living reserves (${formatINR(validSavings)} of ${formatINR(recommendedFund)} recommended).`);
+  };
+
   const handleSaveToProfile = () => {
     updateProfile({ currentSavings: validSavings });
+    setStatusMessage(`Current savings of ${formatINR(validSavings)} saved to your profile!`);
+    setCalcError('');
   };
 
   return (
@@ -62,13 +79,13 @@ export const EmergencyFundPage = () => {
 
       <div className="page-header" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
         <div>
-          <h1 className="page-title">Personal Emergency Fund Planner</h1>
-          <p className="page-subtitle">
-            Calculate and track your essential living safety runway. Keep family reserves protected independent of loan borrowing calculations.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1 className="page-title">Emergency Fund</h1>
+            <HelpTooltip text="Calculate and track your essential living safety runway. Keep family reserves protected independent of loan borrowing calculations." placement="right" />
+          </div>
         </div>
         <Link to="/profile" className="btn btn-secondary">
-          Financial Profile
+          Profile
         </Link>
       </div>
 
@@ -132,9 +149,6 @@ export const EmergencyFundPage = () => {
               </div>
               <span>Reserve & Essential Expenses Settings</span>
             </div>
-            <span className="cl-badge" style={{ backgroundColor: 'var(--accent-amber-light)', color: 'var(--accent-amber-text)', border: '1px solid var(--accent-amber-border)' }}>
-              Editable Targets
-            </span>
           </div>
 
           {/* 1. Essential Monthly Expenses */}
@@ -224,13 +238,60 @@ export const EmergencyFundPage = () => {
             </div>
           </div>
 
-          <button
-            onClick={handleSaveToProfile}
-            className="btn btn-primary"
-            style={{ width: '100%', marginTop: '18px', padding: '12px' }}
-          >
-            Save Updated Savings to Profile
-          </button>
+          {calcError && (
+            <div style={{
+              backgroundColor: 'var(--status-risky-bg)',
+              color: 'var(--status-risky-text)',
+              border: '1px solid var(--status-risky-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 14px',
+              fontSize: '0.85rem',
+              marginTop: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <AlertCircle size={16} />
+              <span>{calcError}</span>
+            </div>
+          )}
+
+          {statusMessage && (
+            <div style={{
+              backgroundColor: 'var(--status-comfortable-bg)',
+              color: 'var(--status-comfortable-text)',
+              border: '1px solid var(--status-comfortable-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 14px',
+              fontSize: '0.85rem',
+              marginTop: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <CheckCircle2 size={16} />
+              <span>{statusMessage}</span>
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '18px' }}>
+            <button
+              type="button"
+              onClick={handleCalculateRunway}
+              className="btn btn-secondary"
+              style={{ width: '100%', padding: '12px' }}
+            >
+              <span>Calculate Runway</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveToProfile}
+              className="btn btn-primary"
+              style={{ width: '100%', padding: '12px' }}
+            >
+              <span>Save to Profile</span>
+            </button>
+          </div>
         </div>
 
         {/* Right: Visual Benchmarks Chart */}
@@ -242,9 +303,6 @@ export const EmergencyFundPage = () => {
               </div>
               <span>Runway Benchmarks Comparison</span>
             </div>
-            <span className="cl-badge" style={{ backgroundColor: 'var(--accent-sky-light)', color: 'var(--accent-sky-text)', border: '1px solid var(--accent-sky-border)' }}>
-              Benchmarks
-            </span>
           </div>
 
           <div style={{ height: '260px', width: '100%' }}>

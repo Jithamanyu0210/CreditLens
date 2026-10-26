@@ -5,11 +5,9 @@ import {
   Search,
   ExternalLink,
   Calculator,
-  ShieldCheck,
   Filter,
   ArrowUpDown,
   SlidersHorizontal,
-  Calendar,
   AlertCircle,
   CheckCircle2,
   Table as TableIcon,
@@ -35,6 +33,7 @@ import { useLoan } from '../context/LoanContext';
 import { bankRateAPI } from '../services/api';
 import { formatINR, formatNumber, formatPercent } from '../utils/formatters';
 import { calculateEMI } from '../utils/loanCalculations';
+import { HelpTooltip } from '../components/common/HelpTooltip';
 
 const MANDATORY_DISCLAIMER =
   "Interest rates shown are indicative and subject to change. Actual rates, eligibility and charges depend on the bank's current terms and the applicant's financial profile. Please verify the final offer directly with the bank.";
@@ -315,71 +314,17 @@ export const BankRatesPage = () => {
             Verified Banking Intelligence
           </span>
         </div>
-
-        <h1 style={{
-          fontSize: '2rem',
-          fontWeight: 800,
-          color: 'var(--text-primary)',
-          letterSpacing: '-0.02em',
-          marginBottom: '8px'
-        }}>
-          Bank Interest Rate Search & Comparison
-        </h1>
-
-        <p style={{
-          color: 'var(--text-secondary)',
-          fontSize: '1.02rem',
-          maxWidth: '850px',
-          lineHeight: 1.6
-        }}>
-          Search verified published interest rates by Bank Name and Loan Type across 19+ Indian scheduled commercial banks.
-          Examine floating benchmarks, eligibility conditions, processing fees, and seamlessly test any rate in the CreditLens EMI calculator.
-        </p>
-
-        {/* Feature Badges */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '16px' }}>
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'var(--bg-card-subtle)',
-            border: '1px solid var(--border-subtle)',
-            padding: '5px 12px',
-            borderRadius: 'var(--radius-full)',
-            fontSize: '0.82rem',
-            fontWeight: 600,
-            color: 'var(--text-secondary)'
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+          <h1 style={{
+            fontSize: '2rem',
+            fontWeight: 800,
+            color: 'var(--text-primary)',
+            letterSpacing: '-0.02em',
+            margin: 0
           }}>
-            <ShieldCheck size={14} color="#10b981" /> 19+ Banks Verified
-          </span>
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'var(--bg-card-subtle)',
-            border: '1px solid var(--border-subtle)',
-            padding: '5px 12px',
-            borderRadius: 'var(--radius-full)',
-            fontSize: '0.82rem',
-            fontWeight: 600,
-            color: 'var(--text-secondary)'
-          }}>
-            <Calendar size={14} color="var(--primary)" /> Sourced March 2026
-          </span>
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'var(--bg-card-subtle)',
-            border: '1px solid var(--border-subtle)',
-            padding: '5px 12px',
-            borderRadius: 'var(--radius-full)',
-            fontSize: '0.82rem',
-            fontWeight: 600,
-            color: 'var(--text-secondary)'
-          }}>
-            <ExternalLink size={14} color="var(--primary)" /> 100% Official Links
-          </span>
+            Interest Rates
+          </h1>
+          <HelpTooltip text="Search verified published interest rates by Bank Name and Loan Type across 19+ Indian scheduled commercial banks." placement="right" />
         </div>
       </div>
 
@@ -436,11 +381,11 @@ export const BankRatesPage = () => {
               }}>
                 <Search size={18} />
               </div>
-              Bank Interest Rate Search (By Name & Loan Type)
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>Bank Rate Search</span>
+                <HelpTooltip text="Select or type any bank name and pick a loan type to view that bank's specific verified rate, conditions, and official source." placement="right" />
+              </div>
             </h2>
-            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px', margin: '4px 0 0 0' }}>
-              Select or type any bank name and pick a loan type to view that bank's specific verified rate, conditions, and official source.
-            </p>
           </div>
 
           {/* Quick preset chips */}
@@ -573,11 +518,8 @@ export const BankRatesPage = () => {
                       </div>
                     </div>
                     <span style={{
-                      fontSize: '0.72rem',
+                      fontSize: '0.75rem',
                       fontWeight: 600,
-                      padding: '2px 8px',
-                      borderRadius: 'var(--radius-full)',
-                      background: bank.bankType === 'Public Sector' ? 'rgba(37, 99, 235, 0.1)' : 'rgba(139, 92, 246, 0.1)',
                       color: bank.bankType === 'Public Sector' ? 'var(--primary)' : '#8b5cf6'
                     }}>
                       {bank.bankType}
@@ -654,6 +596,27 @@ export const BankRatesPage = () => {
           </div>
         </div>
 
+        {/* Search / Check Rates Button */}
+        <div style={{ marginBottom: '20px' }}>
+          <button
+            type="button"
+            onClick={() => performBankSearch(searchBankQuery, searchLoanType)}
+            className="btn btn-primary"
+            style={{
+              padding: '10px 22px',
+              fontSize: '0.92rem',
+              fontWeight: 800,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            id="btn-check-bank-rates"
+          >
+            <Search size={16} />
+            <span>Check Bank Rates</span>
+          </button>
+        </div>
+
         {/* Exact Rate Search Result Display Card */}
         {exactRateLoading ? (
           <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)' }}>
@@ -676,22 +639,7 @@ export const BankRatesPage = () => {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="cl-badge cl-badge-emerald" style={{ fontSize: '0.72rem' }}>
-                    ✓ Rate Verified
-                  </span>
-                  <span style={{
-                    fontSize: '0.72rem',
-                    fontWeight: 700,
-                    padding: '2px 8px',
-                    borderRadius: 'var(--radius-full)',
-                    background: exactRateResult.bankType === 'Public Sector' ? 'rgba(37, 99, 235, 0.1)' : 'rgba(139, 92, 246, 0.1)',
-                    color: exactRateResult.bankType === 'Public Sector' ? 'var(--primary)' : '#8b5cf6'
-                  }}>
-                    {exactRateResult.bankType}
-                  </span>
-                </div>
-                <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '6px', marginBottom: '2px' }}>
+                <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 4px 0' }}>
                   {exactRateResult.bankName}
                 </h3>
                 <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
@@ -820,20 +768,7 @@ export const BankRatesPage = () => {
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
               <AlertCircle size={22} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
               <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                  <span style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    padding: '2px 8px',
-                    borderRadius: 'var(--radius-full)',
-                    background: '#fef3c7',
-                    color: '#92400e',
-                    border: '1px solid #fde68a'
-                  }}>
-                    Rate not available
-                  </span>
-                </div>
-                <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--status-tight-text)', margin: '4px 0' }}>
+                <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--status-tight-text)', margin: '0 0 6px 0' }}>
                   No Verified Rate for {searchBankQuery} under {searchLoanType.replace('_', ' ').toUpperCase()} Loan
                 </h4>
                 <p style={{ fontSize: '0.85rem', color: 'var(--status-tight-text)', lineHeight: 1.5, margin: '4px 0 10px 0' }}>
@@ -1138,11 +1073,11 @@ export const BankRatesPage = () => {
               }}>
                 <Calculator size={18} />
               </div>
-              Quick EMI Simulator & Manual Rate Override
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>Quick EMI Simulator & Manual Rate Override</span>
+                <HelpTooltip text="Test any custom or quoted bank rate manually, preview immediate monthly obligation, or transfer it to the main calculator." placement="top" />
+              </div>
             </h3>
-            <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-              Test any custom or quoted bank rate manually, preview immediate monthly obligation, or transfer it to the main calculator.
-            </p>
           </div>
           <button
             onClick={() => handleCalculateEmiHandoff(sandboxRate, 'Custom Rate Simulator', 'Manual Entry', 'home')}
@@ -1353,13 +1288,9 @@ export const BankRatesPage = () => {
                     </div>
 
                     <span style={{
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      padding: '3px 8px',
-                      borderRadius: 'var(--radius-full)',
-                      background: rate.bankType === 'Public Sector' ? 'var(--accent-indigo-light)' : 'var(--accent-purple-light)',
-                      color: rate.bankType === 'Public Sector' ? 'var(--accent-indigo-text)' : 'var(--accent-purple-text)',
-                      border: `1px solid ${rate.bankType === 'Public Sector' ? 'var(--accent-indigo-border)' : 'var(--accent-purple-border)'}`,
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      color: rate.bankType === 'Public Sector' ? 'var(--primary)' : 'var(--accent-purple)',
                       whiteSpace: 'nowrap'
                     }}>
                       {rate.bankType}
@@ -1393,20 +1324,15 @@ export const BankRatesPage = () => {
                     </div>
 
                     <div style={{ textAlign: 'right' }}>
-                      <span style={{
-                        display: 'inline-block',
-                        fontSize: '0.75rem',
+                      <div style={{
+                        fontSize: '0.8rem',
                         fontWeight: 600,
-                        padding: '2px 8px',
-                        borderRadius: 'var(--radius-full)',
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border-subtle)',
                         color: 'var(--text-secondary)'
                       }}>
                         {rate.rateType}
-                      </span>
+                      </div>
                       {rate.benchmark && (
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                           {rate.benchmark}
                         </div>
                       )}
@@ -1676,27 +1602,6 @@ export const BankRatesPage = () => {
         </div>
       )}
 
-      {/* 11. Secondary Educational Notes Section */}
-      <div style={{
-        marginTop: '36px',
-        padding: '24px',
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-subtle)',
-        borderRadius: 'var(--radius-lg)'
-      }}>
-        <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>
-          Understanding Indian Lending Benchmarks (EBLR vs. MCLR)
-        </h4>
-        <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '12px' }}>
-          Since October 1, 2019, the Reserve Bank of India (RBI) mandates all scheduled commercial banks to link floating retail loans
-          (Home, Auto, MSME) to an External Benchmark Lending Rate (EBLR/RLLR), predominantly the RBI Repo Rate (currently 6.50%).
-          Lenders add a credit risk spread based on borrower CIBIL score, income stability, and loan-to-value (LTV) ratios.
-        </p>
-        <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-          Borrowers with credit scores above 750 consistently qualify for the lowest advertised starting rates. Processing fees,
-          documentation charges, and stamp duty vary across states and loan schemes.
-        </p>
-      </div>
     </div>
   );
 };

@@ -165,7 +165,7 @@ export const LoanProvider = ({ children }) => {
   }, [user]);
 
   // Update profile handler with database feedback
-  const updateProfile = (newProfile) => {
+  const updateProfile = async (newProfile) => {
     const merged = { ...profile, ...newProfile };
     setProfile(merged);
 
@@ -176,29 +176,31 @@ export const LoanProvider = ({ children }) => {
 
     const token = localStorage.getItem('creditlens_token');
     if (token) {
-      profileAPI.saveProfile(merged)
-        .then((res) => {
-          if (res && res.profile) {
-            const synced = {
-              monthlyIncome: res.profile.monthlyIncome ?? 0,
-              monthlyExpenses: res.profile.monthlyExpenses ?? 0,
-              otherExpenses: res.profile.otherExpenses ?? 0,
-              monthlySavingsTarget: res.profile.monthlySavingsTarget ?? 0,
-              currentSavings: res.profile.currentSavings ?? 0,
-              existingEmis: Array.isArray(res.profile.existingEmis) ? res.profile.existingEmis : []
-            };
-            setProfile(synced);
-            if (userId) {
-              localStorage.setItem(`creditlens_profile_${userId}`, JSON.stringify(synced));
-            }
+      try {
+        const res = await profileAPI.saveProfile(merged);
+        if (res && res.profile) {
+          const synced = {
+            monthlyIncome: res.profile.monthlyIncome ?? 0,
+            monthlyExpenses: res.profile.monthlyExpenses ?? 0,
+            otherExpenses: res.profile.otherExpenses ?? 0,
+            monthlySavingsTarget: res.profile.monthlySavingsTarget ?? 0,
+            currentSavings: res.profile.currentSavings ?? 0,
+            existingEmis: Array.isArray(res.profile.existingEmis) ? res.profile.existingEmis : []
+          };
+          setProfile(synced);
+          if (userId) {
+            localStorage.setItem(`creditlens_profile_${userId}`, JSON.stringify(synced));
           }
-          showToast('Financial profile saved to MongoDB successfully!');
-        })
-        .catch((err) => {
-          showToast(err.message || 'Database unavailable. Profile not persisted.', 'error');
-        });
+        }
+        showToast('Financial profile saved successfully!');
+        return { success: true };
+      } catch (err) {
+        showToast(err.message || 'Database unavailable. Profile not persisted.', 'error');
+        throw err;
+      }
     } else {
       showToast('Profile updated locally.');
+      return { success: true };
     }
   };
 
@@ -324,10 +326,10 @@ export const LoanProvider = ({ children }) => {
           setSavedScenarios((prev) =>
             prev.map((s) => (s.id === tempId ? { ...s, id: backendId, _id: backendId } : s))
           );
-          showToast(`"${newScenario.name}" saved to MongoDB!`, 'success');
+          showToast(`"${newScenario.name}" saved successfully!`, 'success');
         }
       }).catch((err) => {
-        showToast(err.message || 'Database unavailable. Scenario not saved to MongoDB.', 'error');
+        showToast(err.message || 'Database unavailable. Scenario not saved.', 'error');
       });
     } else {
       showToast(`"${newScenario.name}" saved to session.`);
@@ -343,7 +345,7 @@ export const LoanProvider = ({ children }) => {
     const token = localStorage.getItem('creditlens_token');
     if (token) {
       scenarioAPI.updateScenario(id, updatedData)
-        .then(() => showToast('Scenario updated in MongoDB.'))
+        .then(() => showToast('Scenario updated successfully.'))
         .catch((err) => showToast(err.message || 'Database update failed', 'error'));
     } else {
       showToast('Scenario updated locally.');
@@ -356,7 +358,7 @@ export const LoanProvider = ({ children }) => {
     const token = localStorage.getItem('creditlens_token');
     if (token) {
       scenarioAPI.deleteScenario(id)
-        .then(() => showToast('Scenario removed from MongoDB.', 'info'))
+        .then(() => showToast('Scenario removed successfully.', 'info'))
         .catch((err) => showToast(err.message || 'Database delete failed', 'error'));
     } else {
       showToast('Scenario removed from session.', 'info');

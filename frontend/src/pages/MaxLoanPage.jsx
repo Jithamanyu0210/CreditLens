@@ -19,6 +19,7 @@ import { calculateMaxAffordableLoan } from '../utils/loanCalculations';
 import { formatINR, formatPercent } from '../utils/formatters';
 import { Disclaimer } from '../components/common/Disclaimer';
 import { BackButton } from '../components/common/BackButton';
+import { HelpTooltip } from '../components/common/HelpTooltip';
 
 export const MaxLoanPage = () => {
   const { profile, updateLoanParams } = useLoan();
@@ -50,6 +51,24 @@ export const MaxLoanPage = () => {
   const totalCommittedOutflow = totalCombinedExpenses + totalDebtEmis + maxLoan.maxAffordableEmi;
   const remainingMonthlyBalance = income - totalCommittedOutflow;
 
+  const [calcError, setCalcError] = useState('');
+  const [calcMessage, setCalcMessage] = useState('');
+
+  const handleCalculateCapacity = () => {
+    if (Number(income) <= 0) {
+      setCalcError('Please enter a valid monthly take-home income greater than zero.');
+      setCalcMessage('');
+      return;
+    }
+    if (Number(tenureYears) <= 0) {
+      setCalcError('Please enter a valid loan tenure of at least 1 year.');
+      setCalcMessage('');
+      return;
+    }
+    setCalcError('');
+    setCalcMessage(`Successfully calculated maximum borrowing capacity: ${formatINR(maxLoan.maxPrincipal)}`);
+  };
+
   const handleApplyToCalculator = () => {
     updateLoanParams({
       principal: maxLoan.maxPrincipal,
@@ -66,13 +85,13 @@ export const MaxLoanPage = () => {
 
       <div className="page-header" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
         <div>
-          <h1 className="page-title">Maximum Loan Capacity Calculator</h1>
-          <p className="page-subtitle">
-            Reverse-engineer your borrowing limit from monthly income, living expenses, other expenses, existing debt, and desired savings.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1 className="page-title">Loan Capacity</h1>
+            <HelpTooltip text="Reverse-engineer your borrowing limit from monthly income, living expenses, other expenses, existing debt, and desired savings." placement="right" />
+          </div>
         </div>
         <Link to="/calculator" className="btn btn-secondary">
-          Standard EMI Calculator
+          EMI Calculator
         </Link>
       </div>
 
@@ -97,13 +116,9 @@ export const MaxLoanPage = () => {
           </span>
         </div>
 
-        <div style={{ fontSize: '2.9rem', fontWeight: '800', letterSpacing: '-0.025em', margin: '6px 0 12px', color: '#ffffff' }}>
+        <div style={{ fontSize: '2.9rem', fontWeight: '800', letterSpacing: '-0.025em', margin: '6px 0 20px', color: '#ffffff' }}>
           {formatINR(maxLoan.maxPrincipal)}
         </div>
-
-        <p style={{ fontSize: '0.925rem', color: '#e0e7ff', maxWidth: '680px', lineHeight: 1.5, marginBottom: '20px' }}>
-          Based on your available surplus cashflow and a prudent 40% debt-to-income ceiling, this is the maximum principal you can responsibly service while protecting your living expenses, other commitments, and monthly savings goal.
-        </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.2)' }}>
           <div>
@@ -138,9 +153,6 @@ export const MaxLoanPage = () => {
               </div>
               <span>Budget & Loan Parameters</span>
             </div>
-            <span className="cl-badge" style={{ backgroundColor: 'var(--accent-indigo-light)', color: 'var(--accent-indigo-text)', border: '1px solid var(--accent-indigo-border)' }}>
-              Editable Inputs
-            </span>
           </div>
 
           {/* 1. Monthly Income */}
@@ -290,25 +302,91 @@ export const MaxLoanPage = () => {
               <label className="form-label" style={{ margin: 0 }}>Desired Tenure (Years)</label>
               <span style={{ fontWeight: '800', color: 'var(--accent-sky)', fontSize: '1.05rem' }}>{tenureYears} Years ({tenureMonths} mos)</span>
             </div>
+            <div className="form-input-wrapper" style={{ marginBottom: '8px' }}>
+              <span className="input-prefix-pill input-prefix-sky">⏱</span>
+              <input
+                type="number"
+                min="1"
+                max="30"
+                step="1"
+                value={tenureYears}
+                onChange={(e) => {
+                  setTenureYears(Math.max(1, Math.min(30, Number(e.target.value) || 1)));
+                  setCalcError('');
+                }}
+                className="form-input has-prefix-pill has-suffix-pill input-sky"
+              />
+              <span className="input-suffix-pill">Years</span>
+            </div>
             <input
               type="range"
               min="1"
               max="30"
               step="1"
               value={tenureYears}
-              onChange={(e) => setTenureYears(Math.max(1, Number(e.target.value)))}
+              onChange={(e) => {
+                setTenureYears(Math.max(1, Number(e.target.value)));
+                setCalcError('');
+              }}
               className="range-slider range-slider-sky"
             />
           </div>
 
-          <button
-            onClick={handleApplyToCalculator}
-            className="btn btn-primary"
-            style={{ width: '100%', marginTop: '18px', padding: '13px' }}
-          >
-            <span>Load {formatINR(maxLoan.maxPrincipal)} into EMI Calculator</span>
-            <ArrowRight size={16} />
-          </button>
+          {calcError && (
+            <div style={{
+              backgroundColor: 'var(--status-risky-bg)',
+              color: 'var(--status-risky-text)',
+              border: '1px solid var(--status-risky-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 14px',
+              fontSize: '0.85rem',
+              marginTop: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <AlertCircle size={16} />
+              <span>{calcError}</span>
+            </div>
+          )}
+
+          {calcMessage && (
+            <div style={{
+              backgroundColor: 'var(--status-comfortable-bg)',
+              color: 'var(--status-comfortable-text)',
+              border: '1px solid var(--status-comfortable-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 14px',
+              fontSize: '0.85rem',
+              marginTop: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <CheckCircle2 size={16} />
+              <span>{calcMessage}</span>
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '18px' }}>
+            <button
+              type="button"
+              onClick={handleCalculateCapacity}
+              className="btn btn-secondary"
+              style={{ width: '100%', padding: '12px' }}
+            >
+              <span>Calculate Capacity</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyToCalculator}
+              className="btn btn-primary"
+              style={{ width: '100%', padding: '12px' }}
+            >
+              <span>Apply to Calculator</span>
+              <ArrowRight size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Right: Cashflow Math & Capacity Analysis */}
@@ -321,9 +399,6 @@ export const MaxLoanPage = () => {
                 </div>
                 <span>Affordability Budget Breakdown</span>
               </div>
-              <span className="cl-badge" style={{ backgroundColor: 'var(--accent-purple-light)', color: 'var(--accent-purple-text)', border: '1px solid var(--accent-purple-border)' }}>
-                Analysis
-              </span>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>

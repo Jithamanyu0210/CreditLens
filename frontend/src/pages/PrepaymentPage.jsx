@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowUpCircle, 
   Sparkles, 
@@ -11,7 +11,9 @@ import {
   Info,
   HelpCircle,
   Calculator,
-  Sliders
+  Sliders,
+  AlertCircle,
+  ArrowRight
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -30,9 +32,11 @@ import { simulatePrepayment, calculateEMI } from '../utils/loanCalculations';
 import { formatINR, formatNumber } from '../utils/formatters';
 import { Disclaimer } from '../components/common/Disclaimer';
 import { BackButton } from '../components/common/BackButton';
+import { HelpTooltip } from '../components/common/HelpTooltip';
 
 export const PrepaymentPage = () => {
-  const { loanParams } = useLoan();
+  const { loanParams, updateLoanParams } = useLoan();
+  const navigate = useNavigate();
 
   // Editable baseline loan parameters
   const [principal, setPrincipal] = useState(loanParams.principal || 1500000);
@@ -43,6 +47,39 @@ export const PrepaymentPage = () => {
   const [extraMonthly, setExtraMonthly] = useState(2500);
   const [lumpSumAmount, setLumpSumAmount] = useState(50000);
   const [lumpSumMonth, setLumpSumMonth] = useState(12);
+
+  const [simError, setSimError] = useState('');
+  const [simMessage, setSimMessage] = useState('');
+
+  const handleSimulate = () => {
+    if (Number(principal) <= 0) {
+      setSimError('Please enter a valid loan principal amount greater than zero.');
+      setSimMessage('');
+      return;
+    }
+    if (Number(annualRate) < 0) {
+      setSimError('Interest rate cannot be negative.');
+      setSimMessage('');
+      return;
+    }
+    if (Number(tenureMonths) <= 0) {
+      setSimError('Please enter a valid loan tenure of at least 1 month.');
+      setSimMessage('');
+      return;
+    }
+    setSimError('');
+    setSimMessage(`Simulation active: saves ${formatINR(simulation.interestSaved)} in interest and cuts tenure by ${simulation.monthsSaved} months!`);
+  };
+
+  const handleApplyToCalculator = () => {
+    updateLoanParams({
+      principal: Number(principal),
+      annualRate: Number(annualRate),
+      tenureMonths: Number(tenureMonths),
+      tenureUnit: 'months'
+    });
+    navigate('/calculator');
+  };
 
   // Validate prepayment against principal to prevent invalid negative balances
   const validExtraMonthly = Math.max(0, Math.min(principal, Number(extraMonthly) || 0));
@@ -65,13 +102,13 @@ export const PrepaymentPage = () => {
 
       <div className="page-header" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
         <div>
-          <h1 className="page-title">Loan Prepayment & Early Payoff Simulator</h1>
-          <p className="page-subtitle">
-            Discover how paying an extra monthly amount or a one-time lump sum slashes total borrowing interest and accelerates your payoff date.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1 className="page-title">Prepayment</h1>
+            <HelpTooltip text="Discover how paying an extra monthly amount or a one-time lump sum slashes total borrowing interest and accelerates your payoff date." placement="right" />
+          </div>
         </div>
         <Link to="/calculator" className="btn btn-secondary">
-          Back to EMI Calculator
+          EMI Calculator
         </Link>
       </div>
 
@@ -134,9 +171,6 @@ export const PrepaymentPage = () => {
               </div>
               <span>Loan & Prepayment Parameters</span>
             </div>
-            <span className="cl-badge" style={{ backgroundColor: 'var(--accent-emerald-light)', color: 'var(--accent-emerald-text)', border: '1px solid var(--accent-emerald-border)' }}>
-              Editable Simulator
-            </span>
           </div>
 
           {/* Editable Loan Parameters */}
@@ -283,17 +317,92 @@ export const PrepaymentPage = () => {
                 <label className="form-label" style={{ margin: 0 }}>Apply Lump-Sum in Month #</label>
                 <span style={{ fontWeight: '800', color: 'var(--accent-sky)', fontSize: '1.05rem' }}>Month {validLumpSumMonth} ({Math.ceil(validLumpSumMonth / 12)} yr)</span>
               </div>
+              <div className="form-input-wrapper" style={{ marginBottom: '8px' }}>
+                <span className="input-prefix-pill input-prefix-sky">⏱</span>
+                <input
+                  type="number"
+                  min="1"
+                  max={tenureMonths}
+                  step="1"
+                  value={lumpSumMonth}
+                  onChange={(e) => {
+                    setLumpSumMonth(Math.max(1, Math.min(tenureMonths, Number(e.target.value) || 1)));
+                    setSimError('');
+                  }}
+                  className="form-input has-prefix-pill has-suffix-pill input-sky"
+                />
+                <span className="input-suffix-pill">Month #</span>
+              </div>
               <input
                 type="range"
                 min="1"
-                max={Math.min(60, tenureMonths)}
+                max={Math.min(120, tenureMonths)}
                 step="1"
                 value={validLumpSumMonth}
-                onChange={(e) => setLumpSumMonth(Number(e.target.value))}
+                onChange={(e) => {
+                  setLumpSumMonth(Number(e.target.value));
+                  setSimError('');
+                }}
                 className="range-slider range-slider-sky"
               />
             </div>
           )}
+
+          {simError && (
+            <div style={{
+              backgroundColor: 'var(--status-risky-bg)',
+              color: 'var(--status-risky-text)',
+              border: '1px solid var(--status-risky-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 14px',
+              fontSize: '0.85rem',
+              marginTop: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <AlertCircle size={16} />
+              <span>{simError}</span>
+            </div>
+          )}
+
+          {simMessage && (
+            <div style={{
+              backgroundColor: 'var(--status-comfortable-bg)',
+              color: 'var(--status-comfortable-text)',
+              border: '1px solid var(--status-comfortable-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 14px',
+              fontSize: '0.85rem',
+              marginTop: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <CheckCircle2 size={16} />
+              <span>{simMessage}</span>
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '18px' }}>
+            <button
+              type="button"
+              onClick={handleSimulate}
+              className="btn btn-secondary"
+              style={{ width: '100%', padding: '12px' }}
+            >
+              <span>Simulate Prepayment</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyToCalculator}
+              className="btn btn-primary"
+              style={{ width: '100%', padding: '12px' }}
+            >
+              <span>Apply to Calculator</span>
+              <ArrowRight size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Right: Comparative Bar Chart & Key Takeaways */}
@@ -306,9 +415,6 @@ export const PrepaymentPage = () => {
                 </div>
                 <span>Borrowing Cost Comparison</span>
               </div>
-              <span className="cl-badge" style={{ backgroundColor: 'var(--accent-sky-light)', color: 'var(--accent-sky-text)', border: '1px solid var(--accent-sky-border)' }}>
-                Comparison
-              </span>
             </div>
 
             <div style={{ height: '240px', width: '100%' }}>

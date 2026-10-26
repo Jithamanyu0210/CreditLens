@@ -44,6 +44,7 @@ import { calculateEMI, assessLoanSolvency } from '../utils/loanCalculations';
 import { formatINR, formatNumber } from '../utils/formatters';
 import { Disclaimer } from '../components/common/Disclaimer';
 import { BackButton } from '../components/common/BackButton';
+import { HelpTooltip } from '../components/common/HelpTooltip';
 
 export const CalculatorPage = () => {
   const { 
@@ -72,6 +73,51 @@ export const CalculatorPage = () => {
   const [tenureValue, setTenureValue] = useState(initialTenureVal);
   const [tenureInput, setTenureInput] = useState(String(initialTenureVal));
   const [tenureError, setTenureError] = useState('');
+  const [calcError, setCalcError] = useState('');
+
+  const handleCalculateEMI = () => {
+    isLocalUpdate.current = true;
+    setCalcError('');
+
+    const p = Number(principal);
+    if (isNaN(p) || p <= 0) {
+      setCalcError('Please enter a valid loan principal amount greater than 0.');
+      return;
+    }
+
+    const r = Number(annualRate);
+    if (isNaN(r) || r < 0) {
+      setCalcError('Please enter a valid interest rate (0% or higher).');
+      return;
+    }
+
+    let t = Number(tenureInput);
+    if (isNaN(t) || t <= 0) {
+      setCalcError('Please enter a valid loan tenure greater than 0.');
+      return;
+    }
+
+    const maxLimit = tenureUnit === 'years' ? 40 : 480;
+    if (t > maxLimit) {
+      setCalcError(`Maximum allowable tenure is ${maxLimit} ${tenureUnit}.`);
+      return;
+    }
+
+    const calculatedMonths = tenureUnit === 'years' ? Math.max(1, Math.round(t * 12)) : Math.max(1, Math.round(t));
+
+    // Calculate deterministic EMI
+    const result = calculateEMI(p, r, calculatedMonths);
+    if (isNaN(result.emi) || !isFinite(result.emi)) {
+      setCalcError('Unable to calculate EMI with current values. Please verify loan parameters.');
+      return;
+    }
+
+    // Sync to global context
+    syncToContext(p, r, calculatedMonths, tenureUnit);
+    if (showToast) {
+      showToast('EMI calculated successfully!');
+    }
+  };
 
   // Loaded saved scenario tracking
   const [activeScenarioId, setActiveScenarioId] = useState(null);
@@ -407,10 +453,10 @@ export const CalculatorPage = () => {
 
       <div className="page-header" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
         <div>
-          <h1 className="page-title">Loan EMI Calculator & Solvency Simulator</h1>
-          <p className="page-subtitle">
-            Fine-tune loan principal, annual interest rate, and tenure with real-time reducing-balance amortization and solvency payability checks.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1 className="page-title">EMI Calculator</h1>
+            <HelpTooltip text="Fine-tune loan principal, annual interest rate, and tenure with real-time reducing-balance amortization and solvency payability checks." placement="right" />
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           {/* Saved Scenarios Selector */}
@@ -557,9 +603,6 @@ export const CalculatorPage = () => {
               </div>
               <span>Loan Parameters & What-If Simulator</span>
             </div>
-            <span className="cl-badge" style={{ backgroundColor: 'var(--accent-indigo-light)', color: 'var(--accent-indigo-text)', border: '1px solid var(--accent-indigo-border)' }}>
-              Reducing Balance
-            </span>
           </div>
 
           {/* 1. Principal Amount */}
@@ -794,6 +837,43 @@ export const CalculatorPage = () => {
               </button>
             </div>
           </div>
+
+          {calcError && (
+            <div style={{
+              backgroundColor: 'var(--status-risky-bg)',
+              color: 'var(--status-risky-text)',
+              border: '1px solid var(--status-risky-border)',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.85rem',
+              marginTop: '16px'
+            }}>
+              {calcError}
+            </div>
+          )}
+
+          <div style={{ marginTop: '20px' }}>
+            <button
+              type="button"
+              onClick={handleCalculateEMI}
+              className="btn btn-primary"
+              style={{
+                width: '100%',
+                padding: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                fontSize: '1rem',
+                fontWeight: 800,
+                boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)'
+              }}
+              id="btn-calculate-emi"
+            >
+              <Calculator size={18} />
+              <span>Calculate EMI</span>
+            </button>
+          </div>
         </div>
 
         {/* Right Column: Calculated Results & Donut Chart */}
@@ -850,9 +930,6 @@ export const CalculatorPage = () => {
                 </div>
                 <span>Payment Composition</span>
               </div>
-              <span className="cl-badge" style={{ backgroundColor: 'var(--accent-purple-light)', color: 'var(--accent-purple-text)', border: '1px solid var(--accent-purple-border)' }}>
-                {totalMonths} Total Installments
-              </span>
             </div>
 
             <div style={{ height: '200px', width: '100%' }}>
@@ -912,15 +989,9 @@ export const CalculatorPage = () => {
               <div className="kpi-icon-container kpi-icon-sky" style={{ width: '34px', height: '34px', borderRadius: '8px' }}>
                 <BarChart3 size={18} />
               </div>
-              <span>Long-Term vs Short-Term Loan Scenario Analysis</span>
+              <span>Tenure Analysis</span>
             </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-              Compare different loan tenures for {formatINR(principal)} @ {effectiveRate.toFixed(2)}% to evaluate affordability versus borrowing cost.
-            </p>
           </div>
-          <span className="cl-badge" style={{ backgroundColor: 'var(--accent-sky-light)', color: 'var(--accent-sky-text)', border: '1px solid var(--accent-sky-border)' }}>
-            Surplus Baseline: {formatINR(effectiveIncome - totalBaselineOutflow)}/mo
-          </span>
         </div>
 
         {/* Trade-off Explanation Banner */}
@@ -1016,13 +1087,13 @@ export const CalculatorPage = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <strong>{row.label}</strong>
                       {row.isCurrent && (
-                        <span className="cl-badge cl-badge-blue" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
-                          Current
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--primary)' }}>
+                          (Current)
                         </span>
                       )}
                       {recommendedTenure.years === row.years && !row.isCurrent && (
-                        <span className="cl-badge cl-badge-emerald" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
-                          Recommended
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--accent-emerald-text)' }}>
+                          (Recommended)
                         </span>
                       )}
                     </div>
@@ -1096,9 +1167,6 @@ export const CalculatorPage = () => {
                 <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--text-primary)' }}>
                   Load Saved Scenario
                 </h3>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  Select any previously saved loan configuration to recalculate inputs, schedule, and solvency.
-                </p>
               </div>
               <button
                 type="button"
@@ -1139,7 +1207,7 @@ export const CalculatorPage = () => {
                       <span style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-primary)' }}>
                         {scen.name}
                       </span>
-                      <span className="cl-badge cl-badge-blue" style={{ fontSize: '0.75rem' }}>
+                      <span style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '0.85rem' }}>
                         EMI: {formatINR(scen.emi)}/mo
                       </span>
                     </div>
@@ -1189,12 +1257,9 @@ export const CalculatorPage = () => {
           zIndex: 1000
         }}>
           <div className="cl-card" style={{ width: '100%', maxWidth: '440px', padding: '28px' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '700', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '700', marginBottom: '16px' }}>
               Save Loan Scenario
             </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-              Save this configuration to your local scenarios library to revisit or compare later.
-            </p>
 
             <form onSubmit={handleSaveScenarioSubmit}>
               <div className="form-group">
@@ -1263,12 +1328,9 @@ export const CalculatorPage = () => {
           zIndex: 1000
         }}>
           <div className="cl-card" style={{ width: '100%', maxWidth: '440px', padding: '28px' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '700', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '700', marginBottom: '16px' }}>
               Save Copy of Scenario
             </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-              Create a distinct duplicate copy of "{activeScenario?.name}".
-            </p>
 
             <form onSubmit={handleSaveCopySubmit}>
               <div className="form-group">

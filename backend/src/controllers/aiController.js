@@ -1,9 +1,13 @@
 import {
   generateAffordabilityExplanation,
-  generateComparisonExplanation
+  generateComparisonExplanation,
+  generateFinancialInsights,
+  generateBudgetInsights,
+  generateChatResponse
 } from '../services/geminiService.js';
 import { calculateEMI } from '../services/emiService.js';
 import { calculateAffordability } from '../services/affordabilityService.js';
+import { calculateEmergencyFund } from '../services/simulatorService.js';
 import { FinancialProfile } from '../models/FinancialProfile.js';
 
 /**
@@ -179,8 +183,180 @@ export const getAiStatus = (req, res) => {
   res.json({
     success: true,
     available: isKeyConfigured,
-    model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
-    features: ['affordability_explanation', 'comparison_analysis'],
+    model: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
+    features: ['affordability_explanation', 'comparison_analysis', 'financial_insights', 'budget_insights', 'chat_assistant'],
     timestamp: new Date().toISOString()
   });
+};
+
+export const getFinancialInsights = async (req, res, next) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const profile = await FinancialProfile.findOne({ userId });
+
+    if (!profile || !profile.monthlyIncome) {
+      return res.json({
+        success: true,
+        missingData: true,
+        message: 'No saved financial profile found. Please configure your income and living expenses in the Profile section to generate personalized financial insights.'
+      });
+    }
+
+    const livingExp = Number(profile.monthlyExpenses) || 0;
+    const otherExp = Number(profile.otherExpenses) || 0;
+    const existingEmisArray = Array.isArray(profile.existingEmis) ? profile.existingEmis : [];
+    const totalExistingEmis = existingEmisArray.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const totalOutflow = livingExp + otherExp + totalExistingEmis;
+    const remainingBalance = profile.monthlyIncome - totalOutflow;
+    const dti = profile.monthlyIncome > 0 ? Number(((totalExistingEmis / profile.monthlyIncome) * 100).toFixed(1)) : 0;
+
+    const calculations = {
+      monthlyIncome: profile.monthlyIncome,
+      monthlyExpenses: livingExp,
+      otherExpenses: otherExp,
+      totalExistingEmis,
+      totalOutflow,
+      remainingBalance,
+      savingsTarget: profile.monthlySavingsTarget || 0,
+      currentSavings: profile.currentSavings || 0,
+      dti
+    };
+
+    const aiResult = await generateFinancialInsights({ profile, calculations });
+
+    res.json({
+      success: true,
+      missingData: false,
+      profileData: {
+        monthlyIncome: profile.monthlyIncome,
+        monthlyExpenses: livingExp,
+        otherExpenses: otherExp,
+        existingEmis: existingEmisArray,
+        totalExistingEmis,
+        remainingBalance,
+        savingsTarget: profile.monthlySavingsTarget || 0,
+        dti
+      },
+      ...aiResult
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getBudgetInsights = async (req, res, next) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const profile = await FinancialProfile.findOne({ userId });
+
+    if (!profile || !profile.monthlyIncome) {
+      return res.json({
+        success: true,
+        missingData: true,
+        message: 'No saved financial profile found. Please configure your monthly budget in the Profile section to generate monthly budget insights.'
+      });
+    }
+
+    const livingExp = Number(profile.monthlyExpenses) || 0;
+    const otherExp = Number(profile.otherExpenses) || 0;
+    const existingEmisArray = Array.isArray(profile.existingEmis) ? profile.existingEmis : [];
+    const totalExistingEmis = existingEmisArray.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const totalOutflow = livingExp + otherExp + totalExistingEmis;
+    const remainingBalance = profile.monthlyIncome - totalOutflow;
+
+    const emergencyFund = calculateEmergencyFund(
+      profile.monthlyIncome,
+      livingExp,
+      otherExp,
+      existingEmisArray,
+      0,
+      profile.currentSavings || 0,
+      6
+    );
+
+    const calculations = {
+      monthlyIncome: profile.monthlyIncome,
+      monthlyExpenses: livingExp,
+      otherExpenses: otherExp,
+      totalExistingEmis,
+      totalOutflow,
+      remainingBalance,
+      savingsTarget: profile.monthlySavingsTarget || 0,
+      currentSavings: profile.currentSavings || 0
+    };
+
+    const aiResult = await generateBudgetInsights({ profile, calculations, emergencyFund });
+
+    res.json({
+      success: true,
+      missingData: false,
+      budgetData: {
+        monthlyIncome: profile.monthlyIncome,
+        monthlyExpenses: livingExp,
+        otherExpenses: otherExp,
+        totalBaseExpenses: livingExp + otherExp,
+        totalExistingEmis,
+        totalOutflow,
+        remainingBalance,
+        savingsTarget: profile.monthlySavingsTarget || 0,
+        currentSavings: profile.currentSavings || 0,
+        emergencyFundTarget: emergencyFund.targetEmergencyFund,
+        emergencyMonthsCovered: emergencyFund.monthsCoveredCurrently
+      },
+      ...aiResult
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const chatWithAssistant = async (req, res, next) => {
+  try {
+    const { message, history } = req.body;
+
+    if (!message || typeof message !== 'string' || message.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a non-empty question or message.'
+      });
+    }
+
+    const userId = req.user._id || req.user.id;
+    let profile = null;
+    try {
+      profile = await FinancialProfile.findOne({ userId });
+    } catch {}
+
+    const livingExp = Number(profile?.monthlyExpenses) || 0;
+    const otherExp = Number(profile?.otherExpenses) || 0;
+    const existingEmisArray = Array.isArray(profile?.existingEmis) ? profile.existingEmis : [];
+    const totalExistingEmis = existingEmisArray.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const income = Number(profile?.monthlyIncome) || 0;
+    const remainingBalance = income - (livingExp + otherExp + totalExistingEmis);
+    const dti = income > 0 ? Number(((totalExistingEmis / income) * 100).toFixed(1)) : 0;
+
+    const calculations = {
+      monthlyIncome: income,
+      monthlyExpenses: livingExp,
+      otherExpenses: otherExp,
+      totalExistingEmis,
+      remainingBalance,
+      currentSavings: Number(profile?.currentSavings) || 0,
+      dti
+    };
+
+    const result = await generateChatResponse({
+      message: message.trim(),
+      history: Array.isArray(history) ? history : [],
+      profile: profile || {},
+      calculations
+    });
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    next(error);
+  }
 };

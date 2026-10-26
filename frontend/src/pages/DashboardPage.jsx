@@ -9,7 +9,6 @@ import {
   Calendar, 
   GitCompare, 
   BookmarkCheck, 
-  ShieldCheck, 
   AlertTriangle,
   CheckCircle2,
   HelpCircle,
@@ -29,6 +28,7 @@ import { formatINR, formatPercent } from '../utils/formatters';
 import { Disclaimer } from '../components/common/Disclaimer';
 import { exportFullFinancialReport } from '../utils/reportGenerator';
 import { generateAmortizationSchedule, calculateEMI } from '../utils/loanCalculations';
+import { HelpTooltip } from '../components/common/HelpTooltip';
 
 export const DashboardPage = () => {
   const navigate = useNavigate();
@@ -41,24 +41,78 @@ export const DashboardPage = () => {
     activeAffordability, 
     activeSolvency,
     savedScenarios, 
-    loadScenarioIntoActive 
+    loadScenarioIntoActive,
+    showToast
   } = useLoan();
 
-  // Quick on-dashboard what-if slider state
+  // Quick on-dashboard what-if simulator state
   const [quickPrincipal, setQuickPrincipal] = useState(loanParams.principal);
   const [quickRate, setQuickRate] = useState(loanParams.annualRate);
   const [quickTenure, setQuickTenure] = useState(loanParams.tenureMonths);
+  const [simError, setSimError] = useState('');
+  const [simSuccess, setSimSuccess] = useState('');
 
-  const quickEmi = calculateEMI(quickPrincipal, quickRate, quickTenure);
+  const quickEmi = calculateEMI(quickPrincipal || 0, quickRate || 0, quickTenure || 1);
   const quickSurplus = profile.monthlyIncome - (profile.monthlyExpenses + activeAffordability.totalExistingEmis + quickEmi.emi);
 
-  const handleApplyQuickSim = () => {
+  const handleRunQuickSim = () => {
+    if (!quickPrincipal || quickPrincipal <= 0) {
+      setSimError('Please enter a valid loan principal amount greater than 0.');
+      setSimSuccess('');
+      return;
+    }
+    if (quickRate < 0) {
+      setSimError('Interest rate cannot be negative.');
+      setSimSuccess('');
+      return;
+    }
+    if (!quickTenure || quickTenure <= 0) {
+      setSimError('Loan tenure must be at least 1 month.');
+      setSimSuccess('');
+      return;
+    }
+    setSimError('');
+    setSimSuccess(`Simulation calculated! Estimated EMI: ${formatINR(quickEmi.emi)}/mo.`);
+  };
+
+  const handleActivePlan = () => {
+    if (!quickPrincipal || quickPrincipal <= 0) {
+      setSimError('Please enter a valid loan principal amount before activating.');
+      setSimSuccess('');
+      return;
+    }
+    if (quickRate < 0) {
+      setSimError('Interest rate cannot be negative.');
+      setSimSuccess('');
+      return;
+    }
+    if (!quickTenure || quickTenure <= 0) {
+      setSimError('Loan tenure must be at least 1 month.');
+      setSimSuccess('');
+      return;
+    }
+
+    setSimError('');
     updateLoanParams({
-      principal: quickPrincipal,
-      annualRate: quickRate,
-      tenureMonths: quickTenure,
+      principal: Number(quickPrincipal),
+      annualRate: Number(quickRate),
+      tenureMonths: Number(quickTenure),
       tenureUnit: quickTenure % 12 === 0 ? 'years' : 'months'
     });
+
+    const msg = `Active loan plan updated: ${formatINR(quickPrincipal)} at ${quickRate}% for ${quickTenure} mos (${formatINR(quickEmi.emi)}/mo).`;
+    setSimSuccess(msg);
+    if (showToast) showToast(msg, 'success');
+  };
+
+  const handleLoadActivePlan = () => {
+    setQuickPrincipal(loanParams.principal);
+    setQuickRate(loanParams.annualRate);
+    setQuickTenure(loanParams.tenureMonths);
+    setSimError('');
+    const msg = `Loaded current active plan: ${formatINR(loanParams.principal)} at ${loanParams.annualRate}%.`;
+    setSimSuccess(msg);
+    if (showToast) showToast(msg, 'info');
   };
 
   const handleDownloadReport = () => {
@@ -67,7 +121,7 @@ export const DashboardPage = () => {
       loanParams.annualRate,
       loanParams.tenureMonths
     );
-    exportFullFinancialReport(profile, loanParams, activeEmiData, activeSolvency, schedule);
+    exportFullFinancialReport(profile, loanParams, activeEmiData, activeSolvency, schedule, { savedScenarios, user });
   };
 
   return (
@@ -79,13 +133,7 @@ export const DashboardPage = () => {
             <h1 className="page-title">
               Welcome back, {user?.name || 'Borrower'}
             </h1>
-            <span className="cl-badge cl-badge-emerald" style={{ fontSize: '0.75rem' }}>
-              <ShieldCheck size={12} /> Verified Account
-            </span>
           </div>
-          <p className="page-subtitle">
-            Here is your live monthly financial snapshot, debt payability verdict, and loan planning suite.
-          </p>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button onClick={handleDownloadReport} className="btn btn-secondary">
@@ -143,10 +191,11 @@ export const DashboardPage = () => {
               <AlertTriangle size={32} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
             )}
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--text-primary)' }}>
                   Loan Payability Verdict: {activeSolvency.verdict}
                 </h3>
+                <HelpTooltip text="Solvency assessment evaluating whether your current income and surplus cashflow can service the proposed loan." placement="right" />
               </div>
               <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '4px', maxWidth: '750px', lineHeight: 1.5 }}>
                 {activeSolvency.verdictSummary}
@@ -192,10 +241,7 @@ export const DashboardPage = () => {
         <div className="kpi-stat-card kpi-emerald">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <div>
-              <span className="cl-badge" style={{ backgroundColor: 'var(--accent-emerald-light)', color: 'var(--accent-emerald-text)', border: '1px solid var(--accent-emerald-border)', fontSize: '0.72rem', padding: '2px 8px' }}>
-                Net Inflow
-              </span>
-              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-secondary)', marginTop: '4px' }}>Monthly Income</div>
+              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-secondary)' }}>Monthly Income</div>
             </div>
             <div className="kpi-icon-container kpi-icon-emerald">
               <Wallet size={20} />
@@ -217,10 +263,7 @@ export const DashboardPage = () => {
         <div className="kpi-stat-card kpi-amber">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <div>
-              <span className="cl-badge" style={{ backgroundColor: 'var(--accent-amber-light)', color: 'var(--accent-amber-text)', border: '1px solid var(--accent-amber-border)', fontSize: '0.72rem', padding: '2px 8px' }}>
-                Basic Needs
-              </span>
-              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-secondary)', marginTop: '4px' }}>Living Expenses</div>
+              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-secondary)' }}>Living Expenses</div>
             </div>
             <div className="kpi-icon-container kpi-icon-amber">
               <ArrowDownRight size={20} />
@@ -248,10 +291,7 @@ export const DashboardPage = () => {
         <div className="kpi-stat-card kpi-rose">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <div>
-              <span className="cl-badge" style={{ backgroundColor: 'var(--accent-rose-light)', color: 'var(--accent-rose-text)', border: '1px solid var(--accent-rose-border)', fontSize: '0.72rem', padding: '2px 8px' }}>
-                Debt Commitments
-              </span>
-              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-secondary)', marginTop: '4px' }}>Existing Loan EMIs</div>
+              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-secondary)' }}>Existing Loan EMIs</div>
             </div>
             <div className="kpi-icon-container kpi-icon-rose">
               <PieChart size={20} />
@@ -279,10 +319,7 @@ export const DashboardPage = () => {
         <div className={`kpi-stat-card ${activeAffordability.remainingBalance >= 0 ? 'kpi-indigo' : 'kpi-rose'}`}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <div>
-              <span className="cl-badge" style={{ backgroundColor: activeAffordability.remainingBalance >= 0 ? 'var(--accent-indigo-light)' : 'var(--accent-rose-light)', color: activeAffordability.remainingBalance >= 0 ? 'var(--accent-indigo-text)' : 'var(--accent-rose-text)', border: `1px solid ${activeAffordability.remainingBalance >= 0 ? 'var(--accent-indigo-border)' : 'var(--accent-rose-border)'}`, fontSize: '0.72rem', padding: '2px 8px' }}>
-                Free Cashflow
-              </span>
-              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-secondary)', marginTop: '4px' }}>Net Available Cash</div>
+              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-secondary)' }}>Net Available Cash</div>
             </div>
             <div className={`kpi-icon-container ${activeAffordability.remainingBalance >= 0 ? 'kpi-icon-indigo' : 'kpi-icon-rose'}`}>
               <TrendingUp size={20} />
@@ -316,25 +353,57 @@ export const DashboardPage = () => {
               <div className="kpi-icon-container kpi-icon-indigo" style={{ width: '34px', height: '34px', borderRadius: '8px' }}>
                 <Sliders size={18} />
               </div>
-              <span>Interactive What-If Loan Simulator</span>
+              <span>Loan Simulator</span>
+              <HelpTooltip text="Test hypothetical loan amounts, interest rates, and tenures to preview immediate cashflow impacts." placement="top" />
             </div>
-            <span className="cl-badge" style={{ backgroundColor: 'var(--accent-indigo-light)', color: 'var(--accent-indigo-text)', border: '1px solid var(--accent-indigo-border)' }}>
-              Live Sliders
-            </span>
           </div>
 
+          {simError && (
+            <div style={{
+              backgroundColor: 'var(--status-risky-bg)',
+              color: 'var(--status-risky-text)',
+              border: '1px solid var(--status-risky-border)',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.85rem',
+              marginBottom: '14px'
+            }}>
+              {simError}
+            </div>
+          )}
+
+          {/* 1. Loan Principal Input & Slider */}
           <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Loan Principal</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <label className="form-label" style={{ margin: 0 }}>Loan Principal Amount (₹)</label>
               <span style={{ fontWeight: '800', color: 'var(--accent-indigo)', fontSize: '1.05rem' }}>{formatINR(quickPrincipal)}</span>
+            </div>
+            <div className="form-input-wrapper">
+              <span className="input-prefix-pill input-prefix-indigo">₹</span>
+              <input
+                type="number"
+                min="1000"
+                step="25000"
+                value={quickPrincipal}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? '' : Math.max(0, Number(e.target.value));
+                  setQuickPrincipal(val === '' ? 0 : val);
+                  setSimError('');
+                }}
+                className="form-input has-prefix-pill input-indigo"
+                placeholder="Enter principal amount"
+              />
             </div>
             <input
               type="range"
               min="50000"
               max="5000000"
               step="25000"
-              value={quickPrincipal}
-              onChange={(e) => setQuickPrincipal(Number(e.target.value))}
+              value={Math.min(5000000, Math.max(50000, quickPrincipal || 0))}
+              onChange={(e) => {
+                setQuickPrincipal(Number(e.target.value));
+                setSimError('');
+              }}
               className="range-slider range-slider-indigo"
             />
             <div className="preset-chips">
@@ -342,7 +411,10 @@ export const DashboardPage = () => {
                 <button
                   key={preset}
                   type="button"
-                  onClick={() => setQuickPrincipal(preset)}
+                  onClick={() => {
+                    setQuickPrincipal(preset);
+                    setSimError('');
+                  }}
                   className={`preset-chip preset-chip-indigo ${quickPrincipal === preset ? 'active' : ''}`}
                 >
                   {formatINR(preset)}
@@ -351,18 +423,39 @@ export const DashboardPage = () => {
             </div>
           </div>
 
-          <div className="form-group" style={{ marginTop: '18px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Interest Rate</span>
+          {/* 2. Annual Interest Rate Input & Slider */}
+          <div className="form-group" style={{ marginTop: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <label className="form-label" style={{ margin: 0 }}>Annual Interest Rate (% p.a.)</label>
               <span style={{ fontWeight: '800', color: 'var(--accent-amber)', fontSize: '1.05rem' }}>{quickRate}% p.a.</span>
+            </div>
+            <div className="form-input-wrapper">
+              <span className="input-prefix-pill input-prefix-amber">%</span>
+              <input
+                type="number"
+                min="0"
+                max="36"
+                step="0.05"
+                value={quickRate}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? '' : Math.max(0, Math.min(100, Number(e.target.value)));
+                  setQuickRate(val === '' ? 0 : val);
+                  setSimError('');
+                }}
+                className="form-input has-prefix-pill input-amber"
+                placeholder="e.g. 8.75"
+              />
             </div>
             <input
               type="range"
               min="0"
               max="20"
               step="0.25"
-              value={quickRate}
-              onChange={(e) => setQuickRate(Number(e.target.value))}
+              value={Math.min(20, Math.max(0, quickRate || 0))}
+              onChange={(e) => {
+                setQuickRate(Number(e.target.value));
+                setSimError('');
+              }}
               className="range-slider range-slider-amber"
             />
             <div className="preset-chips">
@@ -370,7 +463,10 @@ export const DashboardPage = () => {
                 <button
                   key={ratePreset}
                   type="button"
-                  onClick={() => setQuickRate(ratePreset)}
+                  onClick={() => {
+                    setQuickRate(ratePreset);
+                    setSimError('');
+                  }}
                   className={`preset-chip preset-chip-amber ${quickRate === ratePreset ? 'active' : ''}`}
                 >
                   {ratePreset}%
@@ -379,47 +475,143 @@ export const DashboardPage = () => {
             </div>
           </div>
 
-          <div className="form-group" style={{ marginTop: '18px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Loan Tenure</span>
-              <span style={{ fontWeight: '800', color: 'var(--accent-sky)', fontSize: '1.05rem' }}>{quickTenure} Months ({Math.round(quickTenure / 12 * 10) / 10} yrs)</span>
+          {/* 3. Loan Tenure Input & Slider */}
+          <div className="form-group" style={{ marginTop: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <label className="form-label" style={{ margin: 0 }}>Loan Tenure (Months)</label>
+              <span style={{ fontWeight: '800', color: 'var(--accent-sky)', fontSize: '1.05rem' }}>
+                {quickTenure} Months ({Math.round((quickTenure / 12) * 10) / 10} yrs)
+              </span>
+            </div>
+            <div className="form-input-wrapper">
+              <span className="input-prefix-pill input-prefix-sky">⏱</span>
+              <input
+                type="number"
+                min="1"
+                max="360"
+                step="1"
+                value={quickTenure}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? '' : Math.max(1, Math.min(480, Math.round(Number(e.target.value))));
+                  setQuickTenure(val === '' ? 1 : val);
+                  setSimError('');
+                }}
+                className="form-input has-prefix-pill input-sky"
+                placeholder="Enter tenure in months"
+              />
             </div>
             <input
               type="range"
               min="6"
               max="240"
               step="6"
-              value={quickTenure}
-              onChange={(e) => setQuickTenure(Number(e.target.value))}
+              value={Math.min(240, Math.max(6, quickTenure || 6))}
+              onChange={(e) => {
+                setQuickTenure(Number(e.target.value));
+                setSimError('');
+              }}
               className="range-slider range-slider-sky"
             />
           </div>
 
+          {simSuccess && (
+            <div style={{
+              backgroundColor: 'var(--status-comfortable-bg)',
+              color: 'var(--status-comfortable-text)',
+              border: '1px solid var(--status-comfortable-border)',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.85rem',
+              marginTop: '12px',
+              marginBottom: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <CheckCircle2 size={16} />
+              <span>{simSuccess}</span>
+            </div>
+          )}
+
+          {/* Action buttons: Calculate / Simulate & Active Plan */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', marginTop: '14px', marginBottom: '16px' }}>
+            <button
+              type="button"
+              onClick={handleRunQuickSim}
+              className="btn btn-secondary btn-sm"
+              id="btn-simulate-loan"
+            >
+              <Calculator size={14} />
+              <span>Simulate Loan</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleActivePlan}
+              className="btn btn-primary btn-sm"
+              id="btn-active-plan"
+              title="Apply simulated parameters as the active loan plan"
+            >
+              <CheckCircle2 size={14} />
+              <span>Active Plan</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleLoadActivePlan}
+              className="btn btn-secondary btn-sm"
+              id="btn-load-active-plan"
+              title="Reload current active plan values into simulator"
+            >
+              <span>Load Active</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                handleActivePlan();
+                navigate('/calculator');
+              }}
+              className="btn btn-secondary btn-sm"
+              id="btn-open-calc"
+              title="Apply plan and open full EMI Calculator"
+            >
+              <span>Calculator</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+
+          {/* Results Summary Box */}
           <div style={{
             backgroundColor: 'var(--bg-card-subtle)',
             border: '1px solid var(--border-subtle)',
             padding: '16px 20px',
             borderRadius: 'var(--radius-md)',
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '14px',
-            marginTop: '20px'
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+            gap: '14px'
           }}>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Calculated Monthly EMI</div>
-              <div style={{ fontSize: '1.35rem', fontWeight: '800', color: 'var(--accent-indigo)' }}>{formatINR(quickEmi.emi)}<span style={{ fontSize: '0.8rem', fontWeight: '500' }}>/mo</span></div>
+              <div style={{ fontSize: '0.725rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Monthly EMI</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--accent-indigo)' }}>
+                {formatINR(quickEmi.emi)}<span style={{ fontSize: '0.75rem', fontWeight: '500' }}>/mo</span>
+              </div>
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Remaining Cash Surplus</div>
-              <div style={{ fontSize: '1.35rem', fontWeight: '800', color: quickSurplus >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)' }}>
+              <div style={{ fontSize: '0.725rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Total Interest</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--accent-amber)' }}>
+                {formatINR(quickEmi.totalInterest)}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.725rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Total Repayment</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--text-primary)' }}>
+                {formatINR(quickEmi.totalPayment)}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.725rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Monthly Surplus</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: '800', color: quickSurplus >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)' }}>
                 {formatINR(quickSurplus)}
               </div>
             </div>
-            <button onClick={handleApplyQuickSim} className="btn btn-primary btn-sm">
-              Apply to Active
-            </button>
           </div>
         </div>
 
@@ -430,34 +622,28 @@ export const DashboardPage = () => {
               <div className="kpi-icon-container kpi-icon-purple" style={{ width: '34px', height: '34px', borderRadius: '8px' }}>
                 <Sparkles size={18} />
               </div>
-              <span>Core Planning Simulators</span>
+              <span>Simulators</span>
+              <HelpTooltip text="Interactive simulation engines for borrowing capacity, early repayments, emergency funds, and loan comparisons." placement="top" />
             </div>
-            <span className="cl-badge" style={{ backgroundColor: 'var(--accent-purple-light)', color: 'var(--accent-purple-text)', border: '1px solid var(--accent-purple-border)' }}>
-              Interactive Tools
-            </span>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
             <Link 
               to="/max-loan" 
-              onClick={(e) => {
-                e.preventDefault();
-                navigate('/max-loan');
-              }}
               className="sim-launch-card sim-indigo" 
               id="card-max-loan-capacity"
-              role="button"
-              tabIndex={0}
               aria-label="Open Max Loan Capacity Simulator"
             >
               <div>
                 <div className="kpi-icon-container kpi-icon-indigo" style={{ marginBottom: '12px' }}>
                   <Zap size={20} />
                 </div>
-                <div style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--text-primary)' }}>Max Loan Capacity</div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: 1.4 }}>Reverse budget calculation based on disposable income</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--text-primary)' }}>Loan Capacity</span>
+                  <HelpTooltip text="Reverse budget calculation based on disposable income" placement="top" />
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '12px', fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-indigo)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '16px', fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-indigo)' }}>
                 <span>Launch Tool</span>
                 <ArrowRight size={14} />
               </div>
@@ -465,24 +651,20 @@ export const DashboardPage = () => {
 
             <Link 
               to="/prepayment" 
-              onClick={(e) => {
-                e.preventDefault();
-                navigate('/prepayment');
-              }}
               className="sim-launch-card sim-emerald" 
               id="card-prepayment-simulator"
-              role="button"
-              tabIndex={0}
               aria-label="Open Prepayment Simulator"
             >
               <div>
                 <div className="kpi-icon-container kpi-icon-emerald" style={{ marginBottom: '12px' }}>
                   <ArrowUpCircle size={20} />
                 </div>
-                <div style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--text-primary)' }}>Prepayment Simulator</div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: 1.4 }}>Early principal payoff & massive interest savings</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--text-primary)' }}>Prepayment</span>
+                  <HelpTooltip text="Early principal payoff & massive interest savings" placement="top" />
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '12px', fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-emerald)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '16px', fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-emerald)' }}>
                 <span>Launch Tool</span>
                 <ArrowRight size={14} />
               </div>
@@ -490,24 +672,20 @@ export const DashboardPage = () => {
 
             <Link 
               to="/emergency-fund" 
-              onClick={(e) => {
-                e.preventDefault();
-                navigate('/emergency-fund');
-              }}
               className="sim-launch-card sim-amber" 
               id="card-emergency-fund"
-              role="button"
-              tabIndex={0}
               aria-label="Open Emergency Fund Simulator"
             >
               <div>
                 <div className="kpi-icon-container kpi-icon-amber" style={{ marginBottom: '12px' }}>
                   <ShieldAlert size={20} />
                 </div>
-                <div style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--text-primary)' }}>Emergency Fund</div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: 1.4 }}>3–6 month liquidity cushion to protect loan solvency</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--text-primary)' }}>Emergency Fund</span>
+                  <HelpTooltip text="3–6 month liquidity cushion to protect loan solvency" placement="top" />
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '12px', fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-amber)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '16px', fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-amber)' }}>
                 <span>Launch Tool</span>
                 <ArrowRight size={14} />
               </div>
@@ -515,24 +693,20 @@ export const DashboardPage = () => {
 
             <Link 
               to="/compare" 
-              onClick={(e) => {
-                e.preventDefault();
-                navigate('/compare');
-              }}
               className="sim-launch-card sim-purple" 
               id="card-compare-scenarios"
-              role="button"
-              tabIndex={0}
               aria-label="Open Compare Scenarios Simulator"
             >
               <div>
                 <div className="kpi-icon-container kpi-icon-purple" style={{ marginBottom: '12px' }}>
                   <GitCompare size={20} />
                 </div>
-                <div style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--text-primary)' }}>Compare Scenarios</div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: 1.4 }}>Side-by-side tenor & rate comparison with charts</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--text-primary)' }}>Compare Loans</span>
+                  <HelpTooltip text="Side-by-side tenor & rate comparison with charts" placement="top" />
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '12px', fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-purple)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '16px', fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-purple)' }}>
                 <span>Launch Tool</span>
                 <ArrowRight size={14} />
               </div>
@@ -548,9 +722,10 @@ export const DashboardPage = () => {
             <div className="kpi-icon-container kpi-icon-sky" style={{ width: '34px', height: '34px', borderRadius: '8px' }}>
               <BookmarkCheck size={18} />
             </div>
-            <span>Loan Scenario History ({savedScenarios.length})</span>
+            <span>Saved Scenarios ({savedScenarios.length})</span>
+            <HelpTooltip text="Review and reload previously saved hypothetical loan scenarios stored in your account." placement="top" />
           </div>
-          <Link to="/saved" className="btn btn-secondary btn-sm">
+          <Link to="/saved-scenarios" className="btn btn-secondary btn-sm">
             View All Scenarios
           </Link>
         </div>

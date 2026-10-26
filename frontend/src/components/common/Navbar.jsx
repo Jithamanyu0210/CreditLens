@@ -73,7 +73,7 @@ export const Navbar = () => {
       loanParams.annualRate,
       loanParams.tenureMonths
     );
-    exportFullFinancialReport(profile, loanParams, activeEmiData, schedule, activeSolvency);
+    exportFullFinancialReport(profile, loanParams, activeEmiData, activeSolvency, schedule);
   };
 
   const navLinks = [

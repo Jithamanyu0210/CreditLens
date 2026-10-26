@@ -20,9 +20,10 @@ import { useAuth } from '../context/AuthContext';
 import { formatINR, formatPercent } from '../utils/formatters';
 import { Disclaimer } from '../components/common/Disclaimer';
 import { BackButton } from '../components/common/BackButton';
+import { HelpTooltip } from '../components/common/HelpTooltip';
 
 export const ProfilePage = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUserProfile } = useAuth();
   const { 
     profile, 
     profileLoading,
@@ -32,6 +33,61 @@ export const ProfilePage = () => {
     updateExistingLoan, 
     deleteExistingLoan 
   } = useLoan();
+
+  // User Account editing state (Name and Email)
+  const [isEditingUser, setIsEditingUser] = useState(false);
+  const [editUserName, setEditUserName] = useState(user?.name || '');
+  const [editUserEmail, setEditUserEmail] = useState(user?.email || '');
+  const [userSaveLoading, setUserSaveLoading] = useState(false);
+  const [userError, setUserError] = useState('');
+  const [userSuccess, setUserSuccess] = useState('');
+
+  // Keep in sync with user state
+  useEffect(() => {
+    if (user) {
+      setEditUserName(user.name || '');
+      setEditUserEmail(user.email || '');
+    }
+  }, [user]);
+
+  const handleSaveUserAccount = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setUserError('');
+    setUserSuccess('');
+
+    if (!editUserName.trim()) {
+      setUserError('Full name is required.');
+      return;
+    }
+    if (!editUserEmail.trim()) {
+      setUserError('Email address is required.');
+      return;
+    }
+    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,})+$/;
+    if (!emailRegex.test(editUserEmail.trim())) {
+      setUserError('Please enter a valid email address.');
+      return;
+    }
+
+    try {
+      setUserSaveLoading(true);
+      await updateUserProfile(editUserName.trim(), editUserEmail.trim());
+      setUserSuccess('Profile updated successfully!');
+      setIsEditingUser(false);
+      setTimeout(() => setUserSuccess(''), 4000);
+    } catch (err) {
+      setUserError(err.message || 'Failed to update profile. Please try again.');
+    } finally {
+      setUserSaveLoading(false);
+    }
+  };
+
+  const handleCancelUserEdit = () => {
+    setEditUserName(user?.name || '');
+    setEditUserEmail(user?.email || '');
+    setUserError('');
+    setIsEditingUser(false);
+  };
 
   // Baseline form state
   const [income, setIncome] = useState(profile.monthlyIncome ?? 0);
@@ -73,6 +129,9 @@ export const ProfilePage = () => {
   const [editMonths, setEditMonths] = useState('');
 
   const [error, setError] = useState('');
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Handle adding a new EMI with individual details
   const handleAddLoan = (e) => {
@@ -163,7 +222,7 @@ export const ProfilePage = () => {
     setError('');
   };
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
     const incomeNum = income === '' ? 0 : parseFloat(income);
     const expensesNum = expenses === '' ? 0 : parseFloat(expenses);
@@ -196,14 +255,24 @@ export const ProfilePage = () => {
       return;
     }
 
-    updateProfile({
-      monthlyIncome: incomeNum,
-      monthlyExpenses: expensesNum,
-      otherExpenses: otherExpensesNum,
-      monthlySavingsTarget: savingsTargetNum,
-      currentSavings: currentSavingsNum
-    });
-    setError('');
+    try {
+      setIsSaving(true);
+      setError('');
+      await updateProfile({
+        monthlyIncome: incomeNum,
+        monthlyExpenses: expensesNum,
+        otherExpenses: otherExpensesNum,
+        monthlySavingsTarget: savingsTargetNum,
+        currentSavings: currentSavingsNum
+      });
+      setSuccessMessage('Profile updated successfully!');
+      setIsEditingProfile(false);
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (err) {
+      setError(err?.message || 'Failed to update profile. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleReset = () => {
@@ -214,6 +283,7 @@ export const ProfilePage = () => {
     setSavingsTarget(0);
     setCurrentSavings(0);
     setError('');
+    setIsEditingProfile(false);
   };
 
   // Calculations for summary sidebar
@@ -228,64 +298,172 @@ export const ProfilePage = () => {
     <div>
       <BackButton />
       <div className="page-header">
-        <h1 className="page-title">Financial Profile & Debt Portfolio</h1>
-        <p className="page-subtitle">
-          Manage your monthly earnings, essential living costs, other expenses, multiple individual loans, and personal savings targets.
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h1 className="page-title">Profile</h1>
+          <HelpTooltip text="Manage monthly earnings, essential living costs, other expenses, active loans, and personal savings targets." placement="right" />
+        </div>
       </div>
 
-      {/* Authenticated Account Details Banner */}
+      {/* Authenticated Account Details Banner with Full Profile Editing */}
       <div className="cl-card" style={{
         padding: '20px 24px',
         marginBottom: '24px',
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '16px',
         background: 'var(--bg-card)',
         border: '1px solid var(--border-subtle)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        {userError && (
           <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '50%',
-            background: 'var(--primary-light)',
-            color: 'var(--primary)',
-            fontWeight: '800',
-            fontSize: '1.1rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0
+            backgroundColor: 'var(--status-risky-bg)',
+            color: 'var(--status-risky-text)',
+            border: '1px solid var(--status-risky-border)',
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-md)',
+            fontSize: '0.85rem',
+            marginBottom: '14px'
           }}>
-            {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+            {userError}
           </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--text-primary)' }}>
-                {user?.name || 'Verified User'}
+        )}
+
+        {userSuccess && (
+          <div style={{
+            backgroundColor: 'var(--status-comfortable-bg)',
+            color: 'var(--status-comfortable-text)',
+            border: '1px solid var(--status-comfortable-border)',
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-md)',
+            fontSize: '0.85rem',
+            marginBottom: '14px'
+          }}>
+            ✓ {userSuccess}
+          </div>
+        )}
+
+        {!isEditingUser ? (
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{
+                width: '46px',
+                height: '46px',
+                borderRadius: '50%',
+                background: 'var(--primary-light)',
+                color: 'var(--primary)',
+                fontWeight: '800',
+                fontSize: '1.15rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--text-primary)' }}>
+                    {user?.name || 'Verified User'}
+                  </div>
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  {user?.email}
+                </div>
               </div>
             </div>
-            <div style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              {user?.email}
+
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditUserName(user?.name || '');
+                  setEditUserEmail(user?.email || '');
+                  setUserError('');
+                  setUserSuccess('');
+                  setIsEditingUser(true);
+                }}
+                className="btn btn-primary btn-sm"
+                id="btn-edit-account-profile"
+              >
+                <Edit2 size={14} />
+                <span>Edit Profile</span>
+              </button>
+              {user && (
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="btn btn-secondary btn-sm"
+                  style={{ color: 'var(--status-risky)' }}
+                >
+                  Sign Out
+                </button>
+              )}
             </div>
           </div>
-        </div>
+        ) : (
+          <form onSubmit={handleSaveUserAccount} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ fontSize: '1rem', fontWeight: '800', color: 'var(--text-primary)', marginBottom: '4px' }}>
+              Edit Account Information
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '6px' }}>
+                  Full Name
+                </label>
+                <div className="form-input-wrapper">
+                  <input
+                    type="text"
+                    value={editUserName}
+                    onChange={(e) => setEditUserName(e.target.value)}
+                    placeholder="Enter your full name"
+                    className="form-input"
+                    required
+                  />
+                </div>
+              </div>
 
-        <div>
-          {user && (
-            <button
-              type="button"
-              onClick={logout}
-              className="btn btn-secondary btn-sm"
-              style={{ color: 'var(--status-risky)' }}
-            >
-              Sign Out
-            </button>
-          )}
-        </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '6px' }}>
+                  Email Address
+                </label>
+                <div className="form-input-wrapper">
+                  <input
+                    type="email"
+                    value={editUserEmail}
+                    onChange={(e) => setEditUserEmail(e.target.value)}
+                    placeholder="Enter your email address"
+                    className="form-input"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
+              <button
+                type="button"
+                onClick={handleCancelUserEdit}
+                className="btn btn-secondary btn-sm"
+                disabled={userSaveLoading}
+              >
+                <X size={14} />
+                <span>Cancel</span>
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={userSaveLoading}
+                id="btn-save-account-profile"
+              >
+                <Save size={14} />
+                <span>{userSaveLoading ? 'Saving...' : 'Save Profile'}</span>
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       {error && (
@@ -296,14 +474,32 @@ export const ProfilePage = () => {
           padding: '12px 16px',
           borderRadius: 'var(--radius-md)',
           fontSize: '0.875rem',
-          marginBottom: '24px'
+          marginBottom: '20px'
         }}>
           {error}
         </div>
       )}
 
+      {successMessage && (
+        <div style={{
+          backgroundColor: 'var(--status-comfortable-bg)',
+          color: 'var(--status-comfortable-text)',
+          border: '1px solid var(--status-comfortable-border)',
+          padding: '12px 16px',
+          borderRadius: 'var(--radius-md)',
+          fontSize: '0.875rem',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <Check size={16} color="var(--status-comfortable)" />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
       <div className="grid-2" style={{ alignItems: 'flex-start', marginBottom: '28px' }}>
-        {/* Left Column: Editable Financial Baseline & Multiple Loans */}
+        {/* Left Column: Financial Baseline & Multiple Loans */}
         <div className="cl-card cl-card-colored cl-card-emerald">
           <div className="cl-card-header">
             <div className="cl-card-title">
@@ -312,172 +508,266 @@ export const ProfilePage = () => {
               </div>
               <span>Monthly Financial Baseline</span>
             </div>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="btn btn-secondary btn-sm"
-              title="Reset profile to blank state"
-            >
-              <RotateCcw size={14} />
-              <span>Clear Profile</span>
-            </button>
+
+            {!isEditingProfile ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setIncome(profile.monthlyIncome ?? 0);
+                  setExpenses(profile.monthlyExpenses ?? 0);
+                  setOtherExpenses(profile.otherExpenses ?? 0);
+                  setSavingsTarget(profile.monthlySavingsTarget ?? 0);
+                  setCurrentSavings(profile.currentSavings ?? 0);
+                  setError('');
+                  setSuccessMessage('');
+                  setIsEditingProfile(true);
+                }}
+                className="btn btn-primary btn-sm"
+                id="btn-edit-profile"
+              >
+                <Edit2 size={14} />
+                <span>Edit Profile</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="btn btn-secondary btn-sm"
+                title="Reset profile to blank state"
+              >
+                <RotateCcw size={14} />
+                <span>Clear Profile</span>
+              </button>
+            )}
           </div>
 
-          <form onSubmit={handleSaveProfile} noValidate>
-            {/* Monthly Income */}
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label className="form-label" htmlFor="profile-income" style={{ margin: 0 }}>
-                  <span>Net Monthly Take-Home Income (₹)</span>
-                </label>
-                <span className="cl-badge" style={{ backgroundColor: 'var(--accent-emerald-light)', color: 'var(--accent-emerald-text)', border: '1px solid var(--accent-emerald-border)', fontSize: '0.72rem' }}>
-                  Primary Inflow
+          {!isEditingProfile ? (
+            /* Read-Only Profile View */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', backgroundColor: 'var(--bg-card-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="input-prefix-pill input-prefix-emerald">₹</span>
+                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Net Monthly Take-Home Income</span>
+                  <HelpTooltip text="Verified monthly in-hand salary or business net inflow." placement="right" />
+                </div>
+                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {formatINR(profile.monthlyIncome || 0)}
                 </span>
               </div>
-              <div className="form-input-wrapper">
-                <span className="input-prefix-pill input-prefix-emerald">₹</span>
-                <input
-                  id="profile-income"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={income}
-                  onChange={(e) => {
-                    setIncome(e.target.value);
-                    if (error) setError('');
-                  }}
-                  className="form-input has-prefix-pill has-suffix-pill input-emerald"
-                  required
-                />
-                <span className="input-suffix-pill">/ month</span>
-              </div>
-            </div>
 
-            {/* Monthly Living Expenses */}
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label className="form-label" htmlFor="profile-expenses" style={{ margin: 0 }}>
-                  <span>Monthly Living Expenses (Rent, Food, Bills)</span>
-                </label>
-                <span className="cl-badge" style={{ backgroundColor: 'var(--accent-amber-light)', color: 'var(--accent-amber-text)', border: '1px solid var(--accent-amber-border)', fontSize: '0.72rem' }}>
-                  Essential Needs
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', backgroundColor: 'var(--bg-card-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="input-prefix-pill input-prefix-amber">₹</span>
+                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Monthly Living Expenses</span>
+                  <HelpTooltip text="Essential basic living costs: rent, groceries, utilities, and household bills." placement="right" />
+                </div>
+                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {formatINR(profile.monthlyExpenses || 0)}
                 </span>
               </div>
-              <div className="form-input-wrapper">
-                <span className="input-prefix-pill input-prefix-amber">₹</span>
-                <input
-                  id="profile-expenses"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={expenses}
-                  onChange={(e) => {
-                    setExpenses(e.target.value);
-                    if (error) setError('');
-                  }}
-                  className="form-input has-prefix-pill has-suffix-pill input-amber"
-                  required
-                />
-                <span className="input-suffix-pill">/ month</span>
-              </div>
-            </div>
 
-            {/* Other Monthly Expenses */}
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label className="form-label" htmlFor="profile-other-expenses" style={{ margin: 0 }}>
-                  <span>Other Monthly Expenses (Subscriptions & Misc)</span>
-                </label>
-                <span className="cl-badge" style={{ backgroundColor: 'var(--accent-rose-light)', color: 'var(--accent-rose-text)', border: '1px solid var(--accent-rose-border)', fontSize: '0.72rem' }}>
-                  Discretionary
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', backgroundColor: 'var(--bg-card-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="input-prefix-pill input-prefix-rose">₹</span>
+                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Other Monthly Expenses</span>
+                  <HelpTooltip text="Discretionary spending: OTT subscriptions, dining out, gym memberships, and personal care." placement="right" />
+                </div>
+                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {formatINR(profile.otherExpenses || 0)}
                 </span>
               </div>
-              <div className="form-input-wrapper">
-                <span className="input-prefix-pill input-prefix-rose">₹</span>
-                <input
-                  id="profile-other-expenses"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={otherExpenses}
-                  onChange={(e) => {
-                    setOtherExpenses(e.target.value);
-                    if (error) setError('');
-                  }}
-                  className="form-input has-prefix-pill has-suffix-pill input-rose"
-                  placeholder="0"
-                />
-                <span className="input-suffix-pill">/ month</span>
-              </div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                Separate from basic living needs: OTT, gym memberships, dining out, personal care.
-              </span>
-            </div>
 
-            {/* Monthly Savings Target */}
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label className="form-label" htmlFor="profile-savings-target" style={{ margin: 0 }}>
-                  <span>Protected Monthly Savings Target (₹)</span>
-                </label>
-                <span className="cl-badge" style={{ backgroundColor: 'var(--accent-sky-light)', color: 'var(--accent-sky-text)', border: '1px solid var(--accent-sky-border)', fontSize: '0.72rem' }}>
-                  Contingency
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', backgroundColor: 'var(--bg-card-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="input-prefix-pill input-prefix-sky">₹</span>
+                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Monthly Savings Target</span>
+                  <HelpTooltip text="Target amount set aside for investments and contingencies each month." placement="right" />
+                </div>
+                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {formatINR(profile.monthlySavingsTarget || 0)}
                 </span>
               </div>
-              <div className="form-input-wrapper">
-                <span className="input-prefix-pill input-prefix-sky">₹</span>
-                <input
-                  id="profile-savings-target"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={savingsTarget}
-                  onChange={(e) => {
-                    setSavingsTarget(e.target.value);
-                    if (error) setError('');
-                  }}
-                  className="form-input has-prefix-pill has-suffix-pill input-sky"
-                />
-                <span className="input-suffix-pill">/ month</span>
-              </div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                Target amount to set aside for investments and contingency each month
-              </span>
-            </div>
 
-            {/* Current Liquid Savings */}
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label className="form-label" htmlFor="profile-liquid-savings" style={{ margin: 0 }}>
-                  <span>Current Liquid Emergency Reserves (₹)</span>
-                </label>
-                <span className="cl-badge" style={{ backgroundColor: 'var(--accent-teal-light)', color: 'var(--accent-teal-text)', border: '1px solid var(--accent-teal-border)', fontSize: '0.72rem' }}>
-                  Safety Buffer
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', backgroundColor: 'var(--bg-card-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="input-prefix-pill input-prefix-teal">₹</span>
+                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Liquid Emergency Reserves</span>
+                  <HelpTooltip text="Current available emergency funds accessible on short notice." placement="right" />
+                </div>
+                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {formatINR(profile.currentSavings || 0)}
                 </span>
               </div>
-              <div className="form-input-wrapper">
-                <span className="input-prefix-pill input-prefix-teal">₹</span>
-                <input
-                  id="profile-liquid-savings"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={currentSavings}
-                  onChange={(e) => {
-                    setCurrentSavings(e.target.value);
-                    if (error) setError('');
-                  }}
-                  className="form-input has-prefix-pill has-suffix-pill input-teal"
-                />
-                <span className="input-suffix-pill">Reserves</span>
-              </div>
             </div>
+          ) : (
+            /* Editable Profile Form View */
+            <form onSubmit={handleSaveProfile} noValidate>
+              {/* Monthly Income */}
+              <div className="form-group">
+                <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label className="form-label" htmlFor="profile-income" style={{ margin: 0 }}>
+                    Net Monthly Take-Home Income (₹)
+                  </label>
+                  <HelpTooltip text="Verified monthly in-hand salary or business net inflow." placement="right" />
+                </div>
+                <div className="form-input-wrapper">
+                  <span className="input-prefix-pill input-prefix-emerald">₹</span>
+                  <input
+                    id="profile-income"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={income}
+                    onChange={(e) => {
+                      setIncome(e.target.value);
+                      if (error) setError('');
+                    }}
+                    className="form-input has-prefix-pill has-suffix-pill input-emerald"
+                    required
+                  />
+                  <span className="input-suffix-pill">/ month</span>
+                </div>
+              </div>
 
-            <button type="submit" disabled={profileLoading} className="btn btn-primary" style={{ width: '100%', padding: '13px', marginTop: '10px' }}>
-              <Save size={16} />
-              <span>{profileLoading ? 'Loading Profile...' : 'Update Baseline Finances'}</span>
-            </button>
-          </form>
+              {/* Monthly Living Expenses */}
+              <div className="form-group">
+                <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label className="form-label" htmlFor="profile-expenses" style={{ margin: 0 }}>
+                    Monthly Living Expenses (Rent, Food, Bills)
+                  </label>
+                  <HelpTooltip text="Essential basic living costs: rent, groceries, utilities, and household bills." placement="right" />
+                </div>
+                <div className="form-input-wrapper">
+                  <span className="input-prefix-pill input-prefix-amber">₹</span>
+                  <input
+                    id="profile-expenses"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={expenses}
+                    onChange={(e) => {
+                      setExpenses(e.target.value);
+                      if (error) setError('');
+                    }}
+                    className="form-input has-prefix-pill has-suffix-pill input-amber"
+                    required
+                  />
+                  <span className="input-suffix-pill">/ month</span>
+                </div>
+              </div>
+
+              {/* Other Monthly Expenses */}
+              <div className="form-group">
+                <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label className="form-label" htmlFor="profile-other-expenses" style={{ margin: 0 }}>
+                    Other Monthly Expenses (Subscriptions & Misc)
+                  </label>
+                  <HelpTooltip text="Non-essential expenses such as OTT, gym memberships, dining out, and personal care." placement="right" />
+                </div>
+                <div className="form-input-wrapper">
+                  <span className="input-prefix-pill input-prefix-rose">₹</span>
+                  <input
+                    id="profile-other-expenses"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={otherExpenses}
+                    onChange={(e) => {
+                      setOtherExpenses(e.target.value);
+                      if (error) setError('');
+                    }}
+                    className="form-input has-prefix-pill has-suffix-pill input-rose"
+                    placeholder="0"
+                  />
+                  <span className="input-suffix-pill">/ month</span>
+                </div>
+              </div>
+
+              {/* Monthly Savings Target */}
+              <div className="form-group">
+                <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label className="form-label" htmlFor="profile-savings-target" style={{ margin: 0 }}>
+                    Protected Monthly Savings Target (₹)
+                  </label>
+                  <HelpTooltip text="Target amount set aside for investments and contingencies each month." placement="right" />
+                </div>
+                <div className="form-input-wrapper">
+                  <span className="input-prefix-pill input-prefix-sky">₹</span>
+                  <input
+                    id="profile-savings-target"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={savingsTarget}
+                    onChange={(e) => {
+                      setSavingsTarget(e.target.value);
+                      if (error) setError('');
+                    }}
+                    className="form-input has-prefix-pill has-suffix-pill input-sky"
+                  />
+                  <span className="input-suffix-pill">/ month</span>
+                </div>
+              </div>
+
+              {/* Current Liquid Savings */}
+              <div className="form-group">
+                <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label className="form-label" htmlFor="profile-liquid-savings" style={{ margin: 0 }}>
+                    Current Liquid Emergency Reserves (₹)
+                  </label>
+                  <HelpTooltip text="Current available emergency funds accessible on short notice." placement="right" />
+                </div>
+                <div className="form-input-wrapper">
+                  <span className="input-prefix-pill input-prefix-teal">₹</span>
+                  <input
+                    id="profile-liquid-savings"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={currentSavings}
+                    onChange={(e) => {
+                      setCurrentSavings(e.target.value);
+                      if (error) setError('');
+                    }}
+                    className="form-input has-prefix-pill has-suffix-pill input-teal"
+                  />
+                  <span className="input-suffix-pill">Reserves</span>
+                </div>
+              </div>
+
+              {/* Save & Cancel Actions */}
+              <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                <button
+                  type="submit"
+                  disabled={isSaving || profileLoading}
+                  className="btn btn-primary"
+                  style={{ flex: 1, padding: '12px' }}
+                  id="btn-save-profile"
+                >
+                  <Save size={16} />
+                  <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIncome(profile.monthlyIncome ?? 0);
+                    setExpenses(profile.monthlyExpenses ?? 0);
+                    setOtherExpenses(profile.otherExpenses ?? 0);
+                    setSavingsTarget(profile.monthlySavingsTarget ?? 0);
+                    setCurrentSavings(profile.currentSavings ?? 0);
+                    setError('');
+                    setIsEditingProfile(false);
+                  }}
+                  className="btn btn-secondary"
+                  style={{ flex: 1, padding: '12px' }}
+                  id="btn-cancel-edit-profile"
+                >
+                  <X size={16} />
+                  <span>Cancel</span>
+                </button>
+              </div>
+            </form>
+          )}
 
           {/* Multiple Existing Loans Section */}
           <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid var(--border-subtle)' }}>
@@ -486,11 +776,8 @@ export const ProfilePage = () => {
                 <h3 style={{ fontSize: '1.05rem', fontWeight: '700', color: 'var(--text-primary)' }}>
                   Active Existing Loans ({profile.existingEmis.length})
                 </h3>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  Manage individual debts, interest rates, and balances
-                </p>
               </div>
-              <span className="cl-badge cl-badge-amber">
+              <span style={{ fontWeight: '700', color: 'var(--accent-amber-text)', fontSize: '0.9rem' }}>
                 Total: {formatINR(totalExistingEmis)}/mo
               </span>
             </div>
@@ -712,9 +999,6 @@ export const ProfilePage = () => {
                 </div>
                 <span>Cashflow Breakdown & Reserves</span>
               </div>
-              <span className="cl-badge" style={{ backgroundColor: 'var(--accent-indigo-light)', color: 'var(--accent-indigo-text)', border: '1px solid var(--accent-indigo-border)' }}>
-                Live Solvency
-              </span>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>

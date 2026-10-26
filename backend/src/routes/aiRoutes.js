@@ -2,9 +2,12 @@ import express from 'express';
 import {
   explainAffordability,
   explainComparison,
-  getAiStatus
+  getAiStatus,
+  getFinancialInsights,
+  getBudgetInsights,
+  chatWithAssistant
 } from '../controllers/aiController.js';
-import { optionalAuth } from '../middleware/authMiddleware.js';
+import { optionalAuth, protect } from '../middleware/authMiddleware.js';
 import {
   validateAiAffordability,
   validateAiComparison
@@ -20,5 +23,10 @@ router.post('/explain-affordability', optionalAuth, validateAiAffordability, exp
 
 // POST /api/ai/explain-comparison - AI comparative insight across multiple loan options
 router.post('/explain-comparison', optionalAuth, validateAiComparison, explainComparison);
+
+// Dedicated AI Financial Assistant Routes (Protected)
+router.post('/financial-insights', protect, getFinancialInsights);
+router.post('/budget-insights', protect, getBudgetInsights);
+router.post('/chat', protect, chatWithAssistant);
 
 export default router;

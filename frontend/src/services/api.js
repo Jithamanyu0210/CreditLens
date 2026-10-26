@@ -39,7 +39,7 @@ const handleResponse = async (response) => {
       } else if (response.status === 409) {
         errorMsg = 'An account with this email address already exists.';
       } else if (response.status === 503) {
-        errorMsg = 'CreditLens database is currently unavailable. Please verify MongoDB Atlas connection.';
+        errorMsg = 'CreditLens database is currently unavailable. Please verify connection.';
       } else {
         errorMsg = `Request failed with status ${response.status}`;
       }
@@ -93,6 +93,7 @@ export const authAPI = {
   register: (name, email, password) => api.post('/auth/register', { name, email, password }),
   login: (email, password) => api.post('/auth/login', { email, password }),
   getMe: () => api.get('/auth/me'),
+  updateProfile: (name, email) => api.put('/auth/profile', { name, email }),
   logout: () => api.post('/auth/logout', {})
 };
 
@@ -139,7 +140,10 @@ export const scenarioAPI = {
 export const aiAPI = {
   getStatus: () => api.get('/ai/status'),
   explainAffordability: (params) => api.post('/ai/explain-affordability', params),
-  explainComparison: (params) => api.post('/ai/explain-comparison', params)
+  explainComparison: (params) => api.post('/ai/explain-comparison', params),
+  getFinancialInsights: () => api.post('/ai/financial-insights', {}),
+  getBudgetInsights: () => api.post('/ai/budget-insights', {}),
+  chat: (message, history = []) => api.post('/ai/chat', { message, history })
 };
 
 // 7. Bank Interest Rate Comparison APIs

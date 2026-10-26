@@ -57,7 +57,7 @@ export const RegisterPage = () => {
           </div>
           <h1 className="kova-auth-title">Create Your Account</h1>
           <p className="kova-auth-subtitle">
-            Start planning affordable loan terms, stress-testing repayments, and comparing real bank rates
+            Create a new account
           </p>
         </div>
 
@@ -184,7 +184,7 @@ export const RegisterPage = () => {
             {loading ? (
               <span className="kova-btn-loading">
                 <span className="kova-spinner-small" />
-                <span>Creating MongoDB Account...</span>
+                <span>Creating your account...</span>
               </span>
             ) : (
               <>
@@ -206,7 +206,7 @@ export const RegisterPage = () => {
         {/* Security badge */}
         <div className="kova-auth-security-badge">
           <ShieldCheck size={15} className="kova-security-icon" />
-          <span>Bcrypt Password Hashing &bull; Real Database Persistence</span>
+          <span>Secure Password Hashing &bull; Private & Protected Data</span>
         </div>
       </div>
     </div>

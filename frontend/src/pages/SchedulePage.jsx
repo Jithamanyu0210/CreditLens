@@ -29,9 +29,10 @@ import { formatINR, formatNumber } from '../utils/formatters';
 import { Disclaimer } from '../components/common/Disclaimer';
 import { exportAmortizationCSV, exportFullFinancialReport } from '../utils/reportGenerator';
 import { BackButton } from '../components/common/BackButton';
+import { HelpTooltip } from '../components/common/HelpTooltip';
 
 export const SchedulePage = () => {
-  const { profile, loanParams, activeEmiData, activeSolvency } = useLoan();
+  const { profile, loanParams, activeEmiData, activeSolvency, savedScenarios } = useLoan();
   const [selectedYear, setSelectedYear] = useState('all');
   const [pageSize, setPageSize] = useState(12);
   const [currentPage, setCurrentPage] = useState(1);
@@ -72,7 +73,7 @@ export const SchedulePage = () => {
   };
 
   const handlePrintReport = () => {
-    exportFullFinancialReport(profile, loanParams, activeEmiData, activeSolvency, schedule);
+    exportFullFinancialReport(profile, loanParams, activeEmiData, activeSolvency, schedule, { savedScenarios });
   };
 
   return (
@@ -80,15 +81,15 @@ export const SchedulePage = () => {
       <BackButton fallbackPath="/dashboard" />
       <div className="page-header" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
         <div>
-          <h1 className="page-title">Loan Amortization Schedule & Report</h1>
-          <p className="page-subtitle">
-            Month-by-month repayment breakdown: observe your outstanding balance decrease to zero as principal accumulates.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1 className="page-title">Repayment Plan</h1>
+            <HelpTooltip text="Month-by-month repayment breakdown: observe your outstanding balance decrease to zero as principal accumulates." placement="right" />
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button onClick={handlePrintReport} className="btn btn-secondary">
             <FileText size={16} />
-            <span>Printable Report (PDF)</span>
+            <span>Full Report (PDF)</span>
           </button>
           <button onClick={handleExportCSV} className="btn btn-secondary">
             <Download size={16} />
@@ -198,7 +199,6 @@ export const SchedulePage = () => {
             </div>
             <span>Balance Payoff & Principal Progression</span>
           </div>
-          <span className="cl-badge cl-badge-blue">Amortization Curve</span>
         </div>
 
         <div style={{ height: '300px', width: '100%' }}>
@@ -326,9 +326,9 @@ export const SchedulePage = () => {
                   </td>
                   <td>
                     {row.balance === 0 ? (
-                      <span className="cl-badge cl-badge-emerald">Fully Repaid 🎉</span>
+                      <span style={{ fontWeight: '600', color: 'var(--accent-emerald-text)' }}>Fully Repaid 🎉</span>
                     ) : (
-                      <span className="cl-badge cl-badge-gray">Active</span>
+                      <span style={{ color: 'var(--text-muted)' }}>Active</span>
                     )}
                   </td>
                 </tr>
