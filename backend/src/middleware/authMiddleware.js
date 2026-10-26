@@ -39,13 +39,13 @@ export const protect = async (req, res, next) => {
       return next();
     }
 
-    // Fast in-memory / offline fallback
-    if (decoded && decoded.id) {
+    // In-memory test fallback used strictly for isolated unit tests
+    if (process.env.NODE_ENV === 'test' && decoded && decoded.id) {
       req.user = {
         _id: decoded.id,
         id: decoded.id,
-        name: decoded.name || 'CreditLens User',
-        email: decoded.email || 'user@creditlens.demo'
+        name: decoded.name || 'Test User',
+        email: decoded.email || 'user@creditlens.test'
       };
       return next();
     }
@@ -87,12 +87,12 @@ export const optionalAuth = async (req, res, next) => {
       }
     }
 
-    if (!req.user && decoded?.id) {
+    if (process.env.NODE_ENV === 'test' && !req.user && decoded?.id) {
       req.user = {
         _id: decoded.id,
         id: decoded.id,
-        name: decoded.name || 'CreditLens User',
-        email: decoded.email || 'user@creditlens.demo'
+        name: decoded.name || 'Test User',
+        email: decoded.email || 'user@creditlens.test'
       };
     }
   } catch {

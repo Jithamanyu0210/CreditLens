@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   ShieldAlert, 
@@ -23,11 +23,17 @@ import { HelpTooltip } from '../components/common/HelpTooltip';
 export const EmergencyFundPage = () => {
   const { profile, updateProfile } = useLoan();
 
-  // Baseline essential expenses (living + other expenses)
-  const defaultEssential = (profile.monthlyExpenses || 32000) + (profile.otherExpenses || 6000);
+  // Baseline essential expenses (living + other expenses) from actual profile
+  const defaultEssential = (Number(profile.monthlyExpenses) || 0) + (Number(profile.otherExpenses) || 0);
   const [essentialExpenses, setEssentialExpenses] = useState(defaultEssential);
-  const [currentSavings, setCurrentSavings] = useState(profile.currentSavings || 180000);
+  const [currentSavings, setCurrentSavings] = useState(Number(profile.currentSavings) || 0);
   const [targetMonthsChoice, setTargetMonthsChoice] = useState(6);
+
+  useEffect(() => {
+    const essential = (Number(profile.monthlyExpenses) || 0) + (Number(profile.otherExpenses) || 0);
+    setEssentialExpenses(essential);
+    setCurrentSavings(Number(profile.currentSavings) || 0);
+  }, [profile.monthlyExpenses, profile.otherExpenses, profile.currentSavings]);
 
   const [calcError, setCalcError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');

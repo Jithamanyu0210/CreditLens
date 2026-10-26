@@ -84,12 +84,12 @@ export const ComparePage = () => {
   const [aiCompLoading, setAiCompLoading] = useState(false);
   const [aiCompError, setAiCompError] = useState(null);
 
-  // Financial baseline numbers for affordability
-  const monthlyIncome = profile.monthlyIncome || 85000;
-  const livingAndOtherExpenses = (profile.monthlyExpenses || 0) + (profile.otherExpenses || 0);
+  // Financial baseline numbers for affordability strictly from user profile
+  const monthlyIncome = Number(profile.monthlyIncome) || 0;
+  const livingAndOtherExpenses = (Number(profile.monthlyExpenses) || 0) + (Number(profile.otherExpenses) || 0);
   const existingDebtEmis = (profile.existingEmis || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const totalBaseExpenses = livingAndOtherExpenses + existingDebtEmis;
-  const savingsTarget = profile.monthlySavingsTarget || 15000;
+  const savingsTarget = Number(profile.monthlySavingsTarget) || 0;
 
   // Add new loan option (up to 5)
   const handleAddOption = () => {

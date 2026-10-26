@@ -38,14 +38,14 @@ export const PrepaymentPage = () => {
   const { loanParams, updateLoanParams } = useLoan();
   const navigate = useNavigate();
 
-  // Editable baseline loan parameters
-  const [principal, setPrincipal] = useState(loanParams.principal || 1500000);
-  const [annualRate, setAnnualRate] = useState(loanParams.annualRate || 8.5);
-  const [tenureMonths, setTenureMonths] = useState(loanParams.tenureMonths || 60);
+  // Editable baseline loan parameters from active loan state
+  const [principal, setPrincipal] = useState(Number(loanParams.principal) || 1000000);
+  const [annualRate, setAnnualRate] = useState(Number(loanParams.annualRate) || 8.5);
+  const [tenureMonths, setTenureMonths] = useState(Number(loanParams.tenureMonths) || 60);
 
-  // Prepayment parameters
-  const [extraMonthly, setExtraMonthly] = useState(2500);
-  const [lumpSumAmount, setLumpSumAmount] = useState(50000);
+  // Prepayment parameters (default to 0, no mock numbers)
+  const [extraMonthly, setExtraMonthly] = useState(0);
+  const [lumpSumAmount, setLumpSumAmount] = useState(0);
   const [lumpSumMonth, setLumpSumMonth] = useState(12);
 
   const [simError, setSimError] = useState('');

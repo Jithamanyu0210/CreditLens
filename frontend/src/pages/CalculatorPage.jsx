@@ -174,8 +174,8 @@ export const CalculatorPage = () => {
     principal,
     effectiveRate,
     totalMonths,
-    profile.monthlySavingsTarget || 15000,
-    profile.otherExpenses || 0
+    Number(profile.monthlySavingsTarget) || 0,
+    Number(profile.otherExpenses) || 0
   );
 
   // Find currently active loaded scenario object if any
@@ -409,7 +409,7 @@ export const CalculatorPage = () => {
       budgetColor = '#ef4444';
       budgetBg = 'var(--status-risky-bg)';
       fitScore = 1;
-    } else if (remainingMonthlyBalance < (profile.monthlySavingsTarget || 15000) || emiShareOfIncome > 40) {
+    } else if (remainingMonthlyBalance < (Number(profile.monthlySavingsTarget) || 0) || emiShareOfIncome > 40) {
       budgetFit = 'Tight Budget';
       budgetColor = '#d97706';
       budgetBg = 'var(--status-tight-bg)';

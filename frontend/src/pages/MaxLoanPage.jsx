@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Zap, 
@@ -25,13 +25,20 @@ export const MaxLoanPage = () => {
   const { profile, updateLoanParams } = useLoan();
   const navigate = useNavigate();
 
-  // Inputs initialized from user profile
-  const [income, setIncome] = useState(profile.monthlyIncome || 85000);
-  const [expenses, setExpenses] = useState(profile.monthlyExpenses || 32000);
-  const [otherExpenses, setOtherExpenses] = useState(profile.otherExpenses || 6000);
-  const [savingsTarget, setSavingsTarget] = useState(profile.monthlySavingsTarget || 15000);
+  // Inputs initialized strictly from authenticated user profile
+  const [income, setIncome] = useState(Number(profile.monthlyIncome) || 0);
+  const [expenses, setExpenses] = useState(Number(profile.monthlyExpenses) || 0);
+  const [otherExpenses, setOtherExpenses] = useState(Number(profile.otherExpenses) || 0);
+  const [savingsTarget, setSavingsTarget] = useState(Number(profile.monthlySavingsTarget) || 0);
   const [rate, setRate] = useState(8.5);
   const [tenureYears, setTenureYears] = useState(5);
+
+  useEffect(() => {
+    setIncome(Number(profile.monthlyIncome) || 0);
+    setExpenses(Number(profile.monthlyExpenses) || 0);
+    setOtherExpenses(Number(profile.otherExpenses) || 0);
+    setSavingsTarget(Number(profile.monthlySavingsTarget) || 0);
+  }, [profile.monthlyIncome, profile.monthlyExpenses, profile.otherExpenses, profile.monthlySavingsTarget]);
 
   const tenureMonths = Math.max(1, tenureYears * 12);
 

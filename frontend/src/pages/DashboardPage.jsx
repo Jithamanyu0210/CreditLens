@@ -227,7 +227,7 @@ export const DashboardPage = () => {
           </div>
 
           <div style={{ backgroundColor: 'var(--bg-card)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>3. Monthly Savings Goal (₹{profile.monthlySavingsTarget || 15000})</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>3. Monthly Savings Goal ({formatINR(profile.monthlySavingsTarget || 0)})</div>
             <div style={{ fontSize: '1.1rem', fontWeight: '800', color: activeSolvency.isSavingsGoalMet ? '#10b981' : '#f59e0b', marginTop: '2px' }}>
               {activeSolvency.isSavingsGoalMet ? '✓ Goal Achieved' : `△ Short by ${formatINR(Math.abs(activeSolvency.surplusAfterSavingsGoal))}`}
             </div>

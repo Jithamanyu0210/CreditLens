@@ -27,24 +27,9 @@ export const ProtectedRoute = ({ children }) => {
 };
 
 /**
- * Route guard for public-only pages like /login and /register.
- * Authenticated users are automatically redirected to /dashboard.
+ * Public route wrapper for authentication pages like /login and /register.
+ * Allows users to access the login and registration interfaces directly.
  */
 export const PublicOnlyRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="kova-loader-container">
-        <div className="kova-pulse-ring" />
-        <div className="kova-loader-text">Loading CreditLens...</div>
-      </div>
-    );
-  }
-
-  if (user) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   return children;
 };

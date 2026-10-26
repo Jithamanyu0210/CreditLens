@@ -98,8 +98,8 @@ export const AffordabilityPage = () => {
     testPrincipal,
     testRate,
     testTenure,
-    profile.monthlySavingsTarget || 15000,
-    profile.otherExpenses || 0
+    Number(profile.monthlySavingsTarget) || 0,
+    Number(profile.otherExpenses) || 0
   );
 
   // Tailored smart financial recommendations with otherExpenses
@@ -110,8 +110,8 @@ export const AffordabilityPage = () => {
     testPrincipal,
     testRate,
     testTenure,
-    profile.monthlySavingsTarget || 15000,
-    profile.otherExpenses || 0
+    Number(profile.monthlySavingsTarget) || 0,
+    Number(profile.otherExpenses) || 0
   );
 
   // Stacked Bar Chart data comparing Monthly Income to Outflow Allocations

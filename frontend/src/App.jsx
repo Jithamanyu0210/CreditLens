@@ -34,23 +34,6 @@ function ScrollToTop() {
   return null;
 }
 
-/**
- * RootRoute checks authentication state:
- * - Unauthenticated visitors are directed to /login first.
- * - Authenticated users are directed to /dashboard.
- */
-function RootRoute() {
-  const { user, loading } = useAuth();
-  if (loading) {
-    return (
-      <div className="kova-loader-container">
-        <div className="kova-pulse-ring" />
-        <div className="kova-loader-text">Loading CreditLens...</div>
-      </div>
-    );
-  }
-  return user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />;
-}
 
 /**
  * AppContent wraps the main layout with the persistent Left Sidebar and TopNavbar
@@ -103,8 +86,8 @@ function AppContent() {
               }
             />
 
-            {/* Root Route: /login first for unauthenticated, /dashboard for authenticated */}
-            <Route path="/" element={<RootRoute />} />
+            {/* Initial entrypoint: Opening the website always shows the Sign In page first */}
+            <Route path="/" element={<Navigate to="/login" replace />} />
             <Route
               path="/dashboard"
               element={
